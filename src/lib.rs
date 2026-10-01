@@ -8,3 +8,4 @@ pub mod git;
 pub mod map;
 pub mod paths;
 pub mod store;
+pub mod tui;

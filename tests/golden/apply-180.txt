@@ -1,0 +1,52 @@
+ Apply regenerated fees  sample · feature/12-apply-fees · 1 commits · 8 files · +30 −4                                                                                     step 3/9
+┏ map ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃SHARED CONTRACTS                    APPLY                               ENTRY POINT                         TESTS                               DOCS                              ┃
+┃◂ types.ts                      +5  ▶ apply.ts                      +6  ▸ route.ts                      +6    mills.test.ts              +5 −1    apply.md                      +3┃
+┃◂ mills.ts                      +5  ◂ fee-writer.ts                  ┆    legacy.ts                  +0 −3                                                                        ┃
+┃                                                                          fmt.ts                        +0                                                                        ┃
+┃                                                                          Enqueue regeneration   not built                                                                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+╭ came from ─────────────────────────────────────────╮╭ apply.ts ────────────────────────────────────────────────────────────╮╭ leads to ──────────────────────────────────────────╮
+│mills.ts                                            ││src/billing/apply.ts                                                  ││route.ts                                            │
+│  apply formats amounts with millsToDecimal.        ││New. Turns insertions into fee rows.                                  ││  The route calls applyChanges.                     │
+│types.ts                                            ││INSIDE THIS FILE                                                      ││                                                    │
+│  apply consumes the new Insertion type.            ││   4 applyChanges  Formats each amount with millsToDecimal.           ││                                                    │
+│fee-writer.ts ┆                                     ││                                                                      ││                                                    │
+│  Both write fee rows, so apply mirrors writeFee's  ││                                                                      ││                                                    │
+│  fields.                                           ││                                                                      ││                                                    │
+│                                                    ││                                                                      ││                                                    │
+│                                                    ││                                                                      ││                                                    │
+│                                                    ││                                                                      ││                                                    │
+│                                                    ││                                                                      ││                                                    │
+│                                                    ││                                                                      ││                                                    │
+│                                                    ││                                                                      ││                                                    │
+│                                                    ││                                                                      ││                                                    │
+╰────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────╯
+╭ diff · src/billing/apply.ts ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│     @@ -0,0 +1,6 @@                                                                                                                                                              │
+│   1 +import type { Insertion } from '@/billing/types';                                                                                                                           │
+│   2 +import { millsToDecimal } from './mills';                                                                                                                                   │
+│   3 +                                                                                                                                                                            │
+│   4 +export function applyChanges(insertions: Insertion[]): string[] {                                                                                                           │
+│   5 +  return insertions.map((ins) => `${ins.fee.id}=${millsToDecimal(ins.fee.amountMills)}`);                                                                                   │
+│   6 +}                                                                                                                                                                           │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ←/→ step   tab pane   ↑/↓ move   ⏎ follow   o open in $EDITOR   d full diff   J/K page   q quit
