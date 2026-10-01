@@ -1,47 +1,50 @@
 # codemapx
 
-A navigable map of the code changes an agent made on a branch: which files changed, which edit
-made the next one necessary, and why. Built for catching up on a branch before review, not for
-watching edits stream in.
+A navigable map of the code changes an agent made on a branch: which files changed, which edit made the next one necessary, and why. Built for catching up on a branch before review, not for watching edits stream in.
 
-Status: prototype. See [docs/design-notes.md](docs/design-notes.md) for what the pilot learned and
-the planned collect → annotate → render pipeline.
-
-## Try the prototype TUI
+## Install
 
 ```sh
-cargo run -- <map-dir>
+cargo install --path .
+ln -s "$PWD/skill/codemapx" ~/.claude/skills/codemapx
 ```
 
-`<map-dir>` holds a `config.json` (the map) and a `diffs.json` (from `scripts/collect-diffs.py`).
-An optional `"ROOT"` in the config is the worktree `o` opens files under. Needs a terminal about
-180×45.
+## Use
+
+1. When an agent finishes a branch, run `/codemapx` in its session. It runs `codemapx collect`, writes the annotations and validates them.
+2. Run `codemapx` in the worktree to open the map. Use `codemapx html -o map.html` to get a page you can share.
+
+| Command | Does |
+|---|---|
+| `codemapx collect [--base REF]` | writes facts.json for the branch and prints the map dir |
+| `codemapx validate` | checks annotations.json against facts.json |
+| `codemapx` / `codemapx view` | opens the TUI |
+| `codemapx html -o FILE` | writes a self-contained HTML page |
+
+Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAPX_STATE_DIR` to move them.
+
+## Keys
 
 | Key | Action |
 |---|---|
 | `←` `→` | step through the edits in reading order |
 | `tab` | move between panes |
 | `↑` `↓` | move within the focused pane |
-| `⏎` | follow a came-from / leads-to link |
-| `o` | open `$EDITOR` at the outline entry or the top visible diff line |
+| `⏎` | in a came-from / leads-to pane, jump to that card; in the inside pane, focus the diff |
+| `o` | open the editor at the diff line, outline entry, or link evidence |
 | `d` | full-screen diff |
 | `J` `K` | page the diff |
-| `q` | quit |
+| `t` | in narrow terminals, swap the collapsed Tests/Docs columns in |
+| `q` / `esc` | quit (`esc` first closes the full-screen diff) |
 
-`cargo run -- <map-dir> --snapshot <node-id> [outline-index]` prints one 180×52 frame as text.
+`o` runs `$EDITOR +<line> <path>` (default `nvim`). For editors that take another form, set a template, e.g. `CODEMAPX_EDITOR='code -g {path}:{line}'`.
 
-## Scripts
+The map wants about 170 columns. Below that, Tests and Docs collapse to counts; below 100 it asks for a wider terminal.
 
-```sh
-scripts/collect-diffs.py <worktree> [base-ref] > diffs.json
-scripts/validate-map.js <config.json> <diffs.json>
-scripts/render-html.py <config.json> <diffs.json> "<title>" > change-map.html
-```
+## Development
 
-## Layout
+`cargo test` runs against a synthetic TS repo built from `tests/sample/`. Goldens (`tests/sample/expected-facts.json`, `tests/golden/*.txt`) are refreshed with `UPDATE_GOLDEN=1 cargo test`; review the diff before committing.
 
-- `src/` – prototype TUI (ratatui)
-- `web/` – HTML template
-- `scripts/` – diff collection, validation, HTML rendering
-- `fixtures/` – local only, gitignored: pilot maps built from private ssk-web branches
-- `docs/` – design notes
+`fixtures/` is local only and gitignored: pilot maps built from private branches. Never commit it.
+
+See [docs/design-notes.md](docs/design-notes.md) for the pilot and [docs/superpowers/specs/2026-10-01-codemapx-v1-design.md](docs/superpowers/specs/2026-10-01-codemapx-v1-design.md) for the v1 design.

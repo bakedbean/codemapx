@@ -97,3 +97,11 @@ fn html_writes_a_page() {
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert!(fs::read_to_string(page).unwrap().contains("<title>Apply regenerated fees</title>"));
 }
+
+#[test]
+fn skill_mentions_every_annotations_field() {
+    let skill = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("skill/codemapx/SKILL.md")).unwrap();
+    for field in ["\"columns\"", "\"files\"", "\"links\"", "\"dropped\"", "\"context\"", "\"context_links\"", "\"missing\"", "\"trail\"", "codemapx collect", "codemapx validate"] {
+        assert!(skill.contains(field), "SKILL.md doesn't mention {field}");
+    }
+}
