@@ -62,10 +62,8 @@ pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     let budget = if card.outline.is_empty() { inner.height as usize } else { 4 };
     let clipped = what.len() > budget;
     head.extend(what.into_iter().take(budget).map(Line::from));
-    if clipped {
-        if let Some(last) = head.last_mut() {
-            last.spans.push(Span::styled(" …", Style::default().fg(DIM)));
-        }
+    if clipped && let Some(last) = head.last_mut() {
+        last.spans.push(Span::styled(" …", Style::default().fg(DIM)));
     }
     let parts = Layout::vertical([Constraint::Length(head.len() as u16), Constraint::Length(1), Constraint::Min(0)]).split(inner);
     f.render_widget(Paragraph::new(head), parts[0]);

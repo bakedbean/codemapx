@@ -105,3 +105,70 @@ fn skill_mentions_every_annotations_field() {
         assert!(skill.contains(field), "SKILL.md doesn't mention {field}");
     }
 }
+
+fn pairs(facts_dir: &Path, ann_dir: &Path) -> Vec<(String, String, String)> {
+    let f: serde_json::Value = serde_json::from_str(&fs::read_to_string(facts_dir.join("facts.json")).unwrap()).unwrap();
+    let a: serde_json::Value = serde_json::from_str(&fs::read_to_string(ann_dir.join("annotations.json")).unwrap()).unwrap();
+    a["links"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| {
+            let c = f["candidates"].as_array().unwrap().iter().find(|c| c["id"] == l["candidate"]).unwrap_or_else(|| panic!("{l}: no such candidate"));
+            (c["from"].as_str().unwrap().into(), c["to"].as_str().unwrap().into(), l["reason"].as_str().unwrap().into())
+        })
+        .collect()
+}
+
+#[test]
+fn carried_annotations_keep_reasons_on_their_pairs() {
+    let s = common::sample();
+    let state = tempfile::tempdir().unwrap();
+    let old = collect_dir(&s.root, state.path());
+    fs::copy(common::sample_dir().join("annotations.json"), old.join("annotations.json")).unwrap();
+    // A candidate (apply.ts -> aaa.ts) that sorts before every existing one shifts all positional ids.
+    fs::write(s.root.join("src/api/aaa.ts"), "import { applyChanges } from '../billing/apply';\n\nexport const run = () => applyChanges([]);\n").unwrap();
+    common::git_out(&s.root, &["add", "-A"]);
+    common::git_out(&s.root, &["commit", "-q", "-m", "aaa"]);
+    let new = collect_dir(&s.root, state.path());
+    assert_ne!(old, new);
+    assert_eq!(pairs(&new, &new), pairs(&old, &old));
+}
+
+#[test]
+fn collecting_a_new_head_keeps_view_on_the_finished_map() {
+    let s = common::sample();
+    let state = tempfile::tempdir().unwrap();
+    let old = collect_dir(&s.root, state.path());
+    fs::copy(common::sample_dir().join("annotations.json"), old.join("annotations.json")).unwrap();
+    fs::write(s.root.join("src/api/aaa.ts"), "import { applyChanges } from '../billing/apply';\n\nexport const run = () => applyChanges([]);\n").unwrap();
+    common::git_out(&s.root, &["add", "-A"]);
+    common::git_out(&s.root, &["commit", "-q", "-m", "aaa"]);
+    collect_dir(&s.root, state.path());
+    let out = bin(&s.root, state.path(), &["view", "--snapshot", "src/billing/apply.ts"]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("map is 1 commit behind HEAD — run /codemapx in the agent session"), "{}", text(&out.stdout));
+    let out = bin(&s.root, state.path(), &["validate"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(text(&out.stdout).contains("src/api/aaa.ts: missing \"what\""), "{}", text(&out.stdout));
+}
+
+#[test]
+fn validate_flags_stale_annotations_alongside_problems() {
+    let s = common::sample();
+    let state = tempfile::tempdir().unwrap();
+    let old = collect_dir(&s.root, state.path());
+    fs::copy(common::sample_dir().join("annotations.json"), old.join("annotations.json")).unwrap();
+    fs::write(s.root.join("src/api/aaa.ts"), "export const a = 1;\n").unwrap();
+    common::git_out(&s.root, &["add", "-A"]);
+    common::git_out(&s.root, &["commit", "-q", "-m", "aaa"]);
+    // Not collected yet: validate checks the old map and says the facts are behind HEAD.
+    let out = bin(&s.root, state.path(), &["validate"]);
+    assert!(text(&out.stderr).contains("note: facts are for 4f5b759, HEAD is "), "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("0 problem(s)"), "{}", text(&out.stdout));
+    collect_dir(&s.root, state.path());
+    let out = bin(&s.root, state.path(), &["validate"]);
+    let o = text(&out.stdout);
+    assert!(o.contains("src/api/aaa.ts: missing \"what\"") && o.contains("(stale; update it)"), "{o}");
+    assert!(!text(&out.stderr).contains("note:"), "{}", text(&out.stderr));
+}

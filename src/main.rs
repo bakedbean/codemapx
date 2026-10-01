@@ -85,17 +85,25 @@ fn cmd_validate(path: Option<PathBuf>) -> ExitCode {
         Ok(g) => g,
         Err(e) => return fail(2, e),
     };
-    let loaded = match load::load(&git) {
+    let loaded = match load::load(&git, true) {
         Ok(l) => l,
         Err(e) => return fail(1, e),
     };
+    let stale = format!("annotations.json: written for {}, facts are at {} (stale; update it)", loaded.annotations.head, loaded.facts.head);
     let problems = match load::merge(&git, &loaded) {
-        Ok(m) if m.annotations_stale => {
-            vec![format!("annotations.json: written for {}, facts are at {} (stale; update it)", loaded.annotations.head, loaded.facts.head)]
-        }
+        Ok(m) if m.annotations_stale => vec![stale],
         Ok(_) => vec![],
-        Err(p) => p,
+        Err(mut p) => {
+            if loaded.annotations.head != loaded.facts.head {
+                p.push(stale);
+            }
+            p
+        }
     };
+    let head = git.head().unwrap_or_default();
+    if loaded.facts.head != head {
+        eprintln!("note: facts are for {}, HEAD is {}; run codemapx collect", short(&loaded.facts.head), short(&head));
+    }
     for p in &problems {
         println!("{p}");
     }
@@ -103,12 +111,16 @@ fn cmd_validate(path: Option<PathBuf>) -> ExitCode {
     if problems.is_empty() { ExitCode::SUCCESS } else { ExitCode::from(1) }
 }
 
+fn short(sha: &str) -> &str {
+    &sha[..sha.len().min(7)]
+}
+
 fn cmd_view(path: Option<PathBuf>, snapshot: &[String], width: u16, height: u16) -> ExitCode {
     let git = match open(path) {
         Ok(g) => g,
         Err(e) => return fail(2, e),
     };
-    let loaded = match load::load(&git) {
+    let loaded = match load::load(&git, false) {
         Ok(l) => l,
         Err(e) => return fail(1, e),
     };
@@ -149,7 +161,7 @@ fn cmd_html(path: Option<PathBuf>, out: &std::path::Path) -> ExitCode {
         Ok(g) => g,
         Err(e) => return fail(2, e),
     };
-    let map = match load::load(&git).map_err(|e| vec![e]).and_then(|l| load::merge(&git, &l)) {
+    let map = match load::load(&git, false).map_err(|e| vec![e]).and_then(|l| load::merge(&git, &l)) {
         Ok(m) => m,
         Err(ps) => {
             for p in &ps {

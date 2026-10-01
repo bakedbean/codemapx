@@ -98,8 +98,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
     let banner = app.banner();
     let banner_h = if banner.is_some() { 1 } else { 0 };
-    let map_h = app.map.columns.iter().map(|c| c.cards.len()).max().unwrap_or(0) as u16 + 3;
-    let (map_c, mid_c) = if app.diff_full { (0, 0) } else { (map_h, 16) };
+    const MID_H: u16 = 16;
+    // The map gets at most 40% of the rows it shares with the diff (min: header + 3 cards); columns scroll.
+    let shared = area.height.saturating_sub(2 + banner_h + MID_H);
+    let map_h = (app.map.columns.iter().map(|c| c.cards.len()).max().unwrap_or(0) as u16 + 3).min((shared * 2 / 5).max(6));
+    let (map_c, mid_c) = if app.diff_full { (0, 0) } else { (map_h, MID_H) };
     let rows = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(banner_h),
@@ -178,9 +181,13 @@ fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<
             Action::Quit => return Ok(()),
             Action::Open(path, line) => {
                 ratatui::restore();
-                open_editor(&path, line);
+                let (t, e) = (env::var("CODEMAPX_EDITOR").ok(), env::var("EDITOR").ok());
+                let res = open_editor(&path, line, t.as_deref(), e.as_deref());
                 *term = ratatui::init();
                 term.clear()?;
+                if let Err(e) = res {
+                    app.flash = Some(format!(" {e}"));
+                }
             }
             Action::None => {}
         }
@@ -198,8 +205,8 @@ pub fn editor_command(path: &str, line: usize, template: Option<&str>, editor: O
     argv
 }
 
-fn open_editor(path: &Path, line: usize) {
-    let (t, e) = (env::var("CODEMAPX_EDITOR").ok(), env::var("EDITOR").ok());
-    let argv = editor_command(&path.to_string_lossy(), line, t.as_deref(), e.as_deref());
-    let _ = Command::new(&argv[0]).args(&argv[1..]).status();
+/// Runs the editor and waits; Err names the command when it can't be started.
+pub fn open_editor(path: &Path, line: usize, template: Option<&str>, editor: Option<&str>) -> Result<(), String> {
+    let argv = editor_command(&path.to_string_lossy(), line, template, editor);
+    Command::new(&argv[0]).args(&argv[1..]).status().map(|_| ()).map_err(|e| format!("can't run {}: {e}", argv[0]))
 }

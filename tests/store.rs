@@ -50,3 +50,70 @@ fn finds_exact_head_else_newest() {
     assert_eq!(find("zzz"), Some(b));
     assert_eq!(store::find_map(root.path(), "sample", "other", "aaa"), None);
 }
+
+fn cand(id: &str, from: &str, to: &str) -> codemapx::facts::Candidate {
+    codemapx::facts::Candidate {
+        id: id.into(),
+        from: from.into(),
+        to: to.into(),
+        kind: codemapx::facts::CandidateKind::Import,
+        evidence: codemapx::facts::Evidence { path: to.into(), line: 1, quote: "x".into() },
+    }
+}
+
+#[test]
+fn carried_link_ids_are_remapped_by_pair() {
+    let root = tempfile::tempdir().unwrap();
+    let mut old = facts("aaa");
+    old.candidates = vec![cand("c1", "a", "b"), cand("c2", "c", "d")];
+    let a = store::save_facts(root.path(), &old).unwrap();
+    fs::write(a.join("annotations.json"), r#"{"links":[{"candidate":"c1","reason":"ab"}],"dropped":[{"candidate":"c2","why":"cd"}]}"#).unwrap();
+    let mut new = facts("bbb");
+    new.candidates = vec![cand("c1", "0", "a"), cand("c2", "a", "b")];
+    let b = store::save_facts(root.path(), &new).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(b.join("annotations.json")).unwrap()).unwrap();
+    assert_eq!(v["links"][0]["candidate"], "c2");
+    assert_eq!(v["dropped"][0]["candidate"], "gone:c->d");
+}
+
+#[test]
+fn carries_from_the_newest_map_with_annotations() {
+    let root = tempfile::tempdir().unwrap();
+    let a = store::save_facts(root.path(), &facts("aaa")).unwrap();
+    fs::write(a.join("annotations.json"), "{\"from\":\"aaa\"}").unwrap();
+    touch(&a.join("facts.json"), 100);
+    let b = store::save_facts(root.path(), &facts("bbb")).unwrap();
+    fs::remove_file(b.join("annotations.json")).unwrap();
+    let c = store::save_facts(root.path(), &facts("ccc")).unwrap();
+    assert_eq!(fs::read_to_string(c.join("annotations.json")).unwrap(), "{\"from\":\"aaa\"}");
+}
+
+#[test]
+fn view_prefers_a_finished_map_validate_prefers_exact_head() {
+    let root = tempfile::tempdir().unwrap();
+    let a = store::save_facts(root.path(), &facts("aaa")).unwrap();
+    touch(&a.join("facts.json"), 100);
+    let find = |head: &str| store::find_map(root.path(), "sample", "feature/12-apply-fees", head);
+    let find_exact = |head: &str| store::find_map_for_validate(root.path(), "sample", "feature/12-apply-fees", head);
+    // Nothing annotated: exact head, so load can say "no annotations.json".
+    let b = store::save_facts(root.path(), &facts("bbb")).unwrap();
+    assert_eq!(find("bbb"), Some(b.clone()));
+    // Only aaa annotated: view uses it; validate still checks bbb.
+    fs::write(a.join("annotations.json"), "{\"head\":\"aaa\"}").unwrap();
+    assert_eq!(find("bbb"), Some(a.clone()));
+    assert_eq!(find_exact("bbb"), Some(b.clone()));
+    // bbb carries aaa's annotations but the agent hasn't updated them: still aaa.
+    fs::write(b.join("annotations.json"), "{\"head\":\"aaa\"}").unwrap();
+    assert_eq!(find("bbb"), Some(a.clone()));
+    fs::write(b.join("annotations.json"), "{\"head\":\"bbb\"}").unwrap();
+    assert_eq!(find("bbb"), Some(b.clone()));
+    assert_eq!(find("zzz"), Some(b));
+}
+
+#[test]
+fn state_root_skips_empty_env_values() {
+    let root = |c: &str, x: &str| store::state_root_from(Some(c.into()), Some(x.into()), Some("/home/u".into()));
+    assert_eq!(root("/s", "/x"), std::path::PathBuf::from("/s"));
+    assert_eq!(root("", "/x"), std::path::PathBuf::from("/x/codemapx"));
+    assert_eq!(root("", ""), std::path::PathBuf::from("/home/u/.local/state/codemapx"));
+}

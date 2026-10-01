@@ -34,16 +34,16 @@ pub fn collect(git: &Git, base: Option<&str>) -> Result<Facts, String> {
         let added_nums: Vec<usize> = added.iter().map(|(n, _)| *n).collect();
         let src = if c.status == Status::Deleted || c.binary { None } else { read(&c.path) };
         let (mut items, mut imps, mut exports) = (vec![], vec![], BTreeSet::new());
-        if let (Some(src), Some(lang)) = (&src, outline::lang_for(&c.path)) {
-            if let Some(tree) = outline::parse(lang, src) {
-                imps = imports::imports(&tree, src);
-                if tree.root_node().has_error() {
-                    warnings.push(format!("{}: parse failed, no outline", c.path));
-                } else {
-                    let decls = outline::declarations(&tree, src);
-                    items = outline::outline(&decls, &added_nums);
-                    exports = outline::changed_exports(&decls, &added_nums);
-                }
+        if let (Some(src), Some(lang)) = (&src, outline::lang_for(&c.path))
+            && let Some(tree) = outline::parse(lang, src)
+        {
+            imps = imports::imports(&tree, src);
+            if tree.root_node().has_error() {
+                warnings.push(format!("{}: parse failed, no outline", c.path));
+            } else {
+                let decls = outline::declarations(&tree, src);
+                items = outline::outline(&decls, &added_nums);
+                exports = outline::changed_exports(&decls, &added_nums);
             }
         }
         infos.push(FileInfo {
