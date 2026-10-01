@@ -2,3 +2,4 @@
 
 pub mod outline;
 pub mod imports;
+pub mod candidates;
