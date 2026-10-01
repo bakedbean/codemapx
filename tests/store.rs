@@ -50,3 +50,40 @@ fn finds_exact_head_else_newest() {
     assert_eq!(find("zzz"), Some(b));
     assert_eq!(store::find_map(root.path(), "sample", "other", "aaa"), None);
 }
+
+fn cand(id: &str, from: &str, to: &str) -> codemapx::facts::Candidate {
+    codemapx::facts::Candidate {
+        id: id.into(),
+        from: from.into(),
+        to: to.into(),
+        kind: codemapx::facts::CandidateKind::Import,
+        evidence: codemapx::facts::Evidence { path: to.into(), line: 1, quote: "x".into() },
+    }
+}
+
+#[test]
+fn carried_link_ids_are_remapped_by_pair() {
+    let root = tempfile::tempdir().unwrap();
+    let mut old = facts("aaa");
+    old.candidates = vec![cand("c1", "a", "b"), cand("c2", "c", "d")];
+    let a = store::save_facts(root.path(), &old).unwrap();
+    fs::write(a.join("annotations.json"), r#"{"links":[{"candidate":"c1","reason":"ab"}],"dropped":[{"candidate":"c2","why":"cd"}]}"#).unwrap();
+    let mut new = facts("bbb");
+    new.candidates = vec![cand("c1", "0", "a"), cand("c2", "a", "b")];
+    let b = store::save_facts(root.path(), &new).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(b.join("annotations.json")).unwrap()).unwrap();
+    assert_eq!(v["links"][0]["candidate"], "c2");
+    assert_eq!(v["dropped"][0]["candidate"], "gone:c->d");
+}
+
+#[test]
+fn carries_from_the_newest_map_with_annotations() {
+    let root = tempfile::tempdir().unwrap();
+    let a = store::save_facts(root.path(), &facts("aaa")).unwrap();
+    fs::write(a.join("annotations.json"), "{\"from\":\"aaa\"}").unwrap();
+    touch(&a.join("facts.json"), 100);
+    let b = store::save_facts(root.path(), &facts("bbb")).unwrap();
+    fs::remove_file(b.join("annotations.json")).unwrap();
+    let c = store::save_facts(root.path(), &facts("ccc")).unwrap();
+    assert_eq!(fs::read_to_string(c.join("annotations.json")).unwrap(), "{\"from\":\"aaa\"}");
+}

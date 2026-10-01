@@ -105,3 +105,32 @@ fn skill_mentions_every_annotations_field() {
         assert!(skill.contains(field), "SKILL.md doesn't mention {field}");
     }
 }
+
+fn pairs(facts_dir: &Path, ann_dir: &Path) -> Vec<(String, String, String)> {
+    let f: serde_json::Value = serde_json::from_str(&fs::read_to_string(facts_dir.join("facts.json")).unwrap()).unwrap();
+    let a: serde_json::Value = serde_json::from_str(&fs::read_to_string(ann_dir.join("annotations.json")).unwrap()).unwrap();
+    a["links"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| {
+            let c = f["candidates"].as_array().unwrap().iter().find(|c| c["id"] == l["candidate"]).unwrap_or_else(|| panic!("{l}: no such candidate"));
+            (c["from"].as_str().unwrap().into(), c["to"].as_str().unwrap().into(), l["reason"].as_str().unwrap().into())
+        })
+        .collect()
+}
+
+#[test]
+fn carried_annotations_keep_reasons_on_their_pairs() {
+    let s = common::sample();
+    let state = tempfile::tempdir().unwrap();
+    let old = collect_dir(&s.root, state.path());
+    fs::copy(common::sample_dir().join("annotations.json"), old.join("annotations.json")).unwrap();
+    // A candidate (apply.ts -> aaa.ts) that sorts before every existing one shifts all positional ids.
+    fs::write(s.root.join("src/api/aaa.ts"), "import { applyChanges } from '../billing/apply';\n\nexport const run = () => applyChanges([]);\n").unwrap();
+    common::git_out(&s.root, &["add", "-A"]);
+    common::git_out(&s.root, &["commit", "-q", "-m", "aaa"]);
+    let new = collect_dir(&s.root, state.path());
+    assert_ne!(old, new);
+    assert_eq!(pairs(&new, &new), pairs(&old, &old));
+}
