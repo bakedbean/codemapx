@@ -172,7 +172,19 @@ fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<
     }
 }
 
+/// argv for opening `path` at `line`: the CODEMAPX_EDITOR template if set, else `$EDITOR +line path`.
+pub fn editor_command(path: &str, line: usize, template: Option<&str>, editor: Option<&str>) -> Vec<String> {
+    if let Some(t) = template.filter(|t| !t.trim().is_empty()) {
+        return t.split_whitespace().map(|w| w.replace("{path}", path).replace("{line}", &line.to_string())).collect();
+    }
+    let mut argv: Vec<String> = editor.filter(|e| !e.trim().is_empty()).unwrap_or("nvim").split_whitespace().map(String::from).collect();
+    argv.push(format!("+{line}"));
+    argv.push(path.to_string());
+    argv
+}
+
 fn open_editor(path: &Path, line: usize) {
-    let editor = env::var("EDITOR").unwrap_or_else(|_| "nvim".into());
-    let _ = Command::new(editor).arg(format!("+{line}")).arg(path).status();
+    let (t, e) = (env::var("CODEMAPX_EDITOR").ok(), env::var("EDITOR").ok());
+    let argv = editor_command(&path.to_string_lossy(), line, t.as_deref(), e.as_deref());
+    let _ = Command::new(&argv[0]).args(&argv[1..]).status();
 }

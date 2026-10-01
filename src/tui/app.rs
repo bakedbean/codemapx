@@ -209,6 +209,13 @@ impl App {
 
     /// File and line `o` opens: the outline entry, else the top visible diff line.
     pub fn editor_target(&self) -> Option<(PathBuf, usize)> {
+        if matches!(self.focus, Pane::From | Pane::To) {
+            let incoming = self.focus == Pane::From;
+            let st = if incoming { &self.from } else { &self.to };
+            let &(_, k) = self.links(incoming).get(st.selected().unwrap_or(0))?;
+            let ev = &self.map.links[k].evidence;
+            return Some((self.root.join(&ev.path), ev.line));
+        }
         let c = self.card();
         let path = self.root.join(c.path.as_ref()?);
         match c.kind {

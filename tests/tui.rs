@@ -81,3 +81,29 @@ fn snapshot_apply_180() {
     }
     common::assert_golden("tests/golden/apply-180.txt", &frame);
 }
+
+#[test]
+fn editor_command_uses_template_then_editor_then_nvim() {
+    assert_eq!(tui::editor_command("/a b.ts", 7, Some("code -g {path}:{line}"), Some("vim")), vec!["code", "-g", "/a b.ts:7"]);
+    assert_eq!(tui::editor_command("/a.ts", 7, None, Some("hx")), vec!["hx", "+7", "/a.ts"]);
+    assert_eq!(tui::editor_command("/a.ts", 7, None, Some("code -w")), vec!["code", "-w", "+7", "/a.ts"]);
+    assert_eq!(tui::editor_command("/a.ts", 7, Some("  "), None), vec!["nvim", "+7", "/a.ts"]);
+}
+
+#[test]
+fn editor_targets_link_evidence_in_link_panes() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    a.focus = Pane::From;
+    assert_eq!(a.editor_target(), Some((PathBuf::from("/wt/src/billing/apply.ts"), 5)));
+    a.from.select(Some(2));
+    assert_eq!(a.editor_target(), Some((PathBuf::from("/wt/src/jobs/fee-writer.ts"), 3)));
+}
+
+#[test]
+fn link_panes_show_evidence() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    let frame = tui::snapshot(&mut a, 180, 52);
+    assert!(frame.contains("src/jobs/fee-writer.ts:3"), "{frame}");
+}
