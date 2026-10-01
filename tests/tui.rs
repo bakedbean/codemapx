@@ -129,8 +129,11 @@ fn snapshot_apply_120_collapses() {
     // mills.test.ts sits in the collapsed Tests column and is a leads-to of mills.ts.
     at(&mut a, "src/billing/mills.ts");
     assert!(tui::snapshot(&mut a, 120, 52).contains("▸ 1 leads to"));
+    assert!(tui::snapshot(&mut a, 120, 52).contains("TESTS · 1"));
     key(&mut a, KeyCode::Char('t'));
-    assert!(tui::snapshot(&mut a, 120, 52).contains("mills.test.ts"));
+    let flipped = tui::snapshot(&mut a, 120, 52);
+    assert!(!flipped.contains("TESTS · 1") && !flipped.contains("DOCS · 1"), "{flipped}");
+    assert!(flipped.contains("APPLY · 2") && flipped.contains("TESTS  ") && flipped.contains("▸ mills.test.ts"), "{flipped}");
 }
 
 #[test]

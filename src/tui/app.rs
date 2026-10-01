@@ -207,8 +207,7 @@ impl App {
         }
     }
 
-    /// File and line `o` opens: the selected link's evidence in the came-from/leads-to panes,
-    /// the outline entry in the inside pane, else the top visible diff line.
+    /// Stale-map warning shown under the header, if any.
     pub fn banner(&self) -> Option<String> {
         match self.behind {
             Some(n) if n > 0 => Some(format!("map is {n} commit{} behind HEAD — run codemapx collect", if n == 1 { "" } else { "s" })),
@@ -218,6 +217,8 @@ impl App {
         }
     }
 
+    /// File and line `o` opens: the selected link's evidence in the came-from/leads-to panes,
+    /// the outline entry in the inside pane, else the top visible diff line.
     pub fn editor_target(&self) -> Option<(PathBuf, usize)> {
         if matches!(self.focus, Pane::From | Pane::To) {
             let incoming = self.focus == Pane::From;
