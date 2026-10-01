@@ -4,7 +4,7 @@ pub mod app;
 mod diff_pane;
 pub mod keys;
 mod link_panes;
-mod map_pane;
+pub mod map_pane;
 
 use std::{env, io, path::Path, process::Command};
 
@@ -17,6 +17,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 pub use app::{App, Pane};
+pub use map_pane::{ColumnView, column_layout};
 use keys::Action;
 
 
@@ -91,22 +92,36 @@ pub(crate) fn pane_block(title: Line<'static>, focused: bool) -> Block<'static> 
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
-    let map_h = app.map.columns.iter().map(|c| c.cards.len()).max().unwrap_or(0) as u16 + 3;
-    let rows = if app.diff_full {
-        Layout::vertical([Constraint::Length(1), Constraint::Length(0), Constraint::Length(0), Constraint::Min(3), Constraint::Length(1)]).split(area)
-    } else {
-        Layout::vertical([Constraint::Length(1), Constraint::Length(map_h), Constraint::Length(16), Constraint::Min(5), Constraint::Length(1)]).split(area)
-    };
-    draw_header(f, app, rows[0]);
-    if !app.diff_full {
-        map_pane::draw(f, app, rows[1]);
-        link_panes::draw(f, app, rows[2]);
+    if area.width < map_pane::MIN_WIDTH {
+        f.render_widget(Paragraph::new(Span::styled("terminal too narrow (need 100)", Style::default().fg(DIM))), area);
+        return;
     }
-    diff_pane::draw(f, app, rows[3]);
+    let banner = app.banner();
+    let banner_h = if banner.is_some() { 1 } else { 0 };
+    let map_h = app.map.columns.iter().map(|c| c.cards.len()).max().unwrap_or(0) as u16 + 3;
+    let (map_c, mid_c) = if app.diff_full { (0, 0) } else { (map_h, 16) };
+    let rows = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(banner_h),
+        Constraint::Length(map_c),
+        Constraint::Length(mid_c),
+        Constraint::Min(3),
+        Constraint::Length(1),
+    ])
+    .split(area);
+    draw_header(f, app, rows[0]);
+    if let Some(b) = &banner {
+        f.render_widget(Paragraph::new(Span::styled(format!(" {b}"), Style::default().fg(AMBER).bold())), rows[1]);
+    }
+    if !app.diff_full {
+        map_pane::draw(f, app, rows[2]);
+        link_panes::draw(f, app, rows[3]);
+    }
+    diff_pane::draw(f, app, rows[4]);
     let help = app.flash.clone().unwrap_or_else(|| {
-        " ←/→ step   tab pane   ↑/↓ move   ⏎ follow   o open in $EDITOR   d full diff   J/K page   q quit".into()
+        " ←/→ step   tab pane   ↑/↓ move   ⏎ follow   o open in editor   d full diff   J/K page   t tests/docs   q quit".into()
     });
-    f.render_widget(Paragraph::new(Span::styled(help, Style::default().fg(DIM))), rows[4]);
+    f.render_widget(Paragraph::new(Span::styled(help, Style::default().fg(DIM))), rows[5]);
 }
 
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
