@@ -6,7 +6,7 @@ const TEMPLATE: &str = include_str!("../web/filemap.tpl.html");
 
 pub fn render(map: &Map) -> String {
     // Escape "</" so map text can't close the <script> tag.
-    let json = serde_json::to_string(map).expect("map serialize").replace("</", "<\\/");
+    let json = serde_json::to_string(map).expect("map serialize").replace("</", "<\\/").replace("<!--", "<\\!--");
     TEMPLATE.replace("/*TITLE*/", &escape(&map.title)).replace("/*MAP*/", &json)
 }
 

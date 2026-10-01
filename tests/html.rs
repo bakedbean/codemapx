@@ -20,6 +20,15 @@ fn escapes_script_breakouts() {
     assert!(out.contains("<title>&lt;b&gt;x&lt;/b&gt;</title>"));
 }
 
+#[test]
+fn escapes_comment_openers() {
+    let mut m = common::sample_map();
+    m.cards[0].diff = "<!--<script>".into();
+    let out = html::render(&m);
+    assert_eq!(out.matches("</script>").count(), 1);
+    assert!(!out.contains("<!--<script>"));
+}
+
 /// Manual check only: writes target/sample-map.html to open in a browser.
 #[test]
 #[ignore]
