@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "head": "4f5b7592e3d1e5038ee9d61fae96e5d194ef559c",
+  "title": "Apply regenerated fees",
+  "summary": "Adds an apply step that writes regenerated fee rows, plus the type and mills helper it needs.",
+  "columns": [
+    { "name": "Shared contracts", "files": ["src/billing/types.ts", "src/billing/mills.ts"] },
+    { "name": "Apply", "files": ["src/billing/apply.ts", "src/jobs/fee-writer.ts"] },
+    { "name": "Entry point", "files": ["src/api/route.ts", "src/api/legacy.ts", "src/util/fmt.ts"] },
+    { "name": "Tests", "files": ["src/billing/mills.test.ts"] },
+    { "name": "Docs", "files": ["docs/apply.md"] }
+  ],
+  "files": {
+    "src/billing/types.ts": { "what": "Adds Insertion, the row the apply step writes.", "outline": { "Insertion": "A fee plus why it is being inserted." } },
+    "src/billing/mills.ts": { "what": "Adds millsToDecimal, the reverse of toMills, so amounts are written back exactly.", "outline": { "millsToDecimal": "Throws on non-integer mills." } },
+    "src/billing/apply.ts": { "what": "New. Turns insertions into fee rows.", "outline": { "applyChanges": "Formats each amount with millsToDecimal." } },
+    "src/api/route.ts": { "what": "New entry point that wraps fees as insertions and applies them.", "outline": { "handle": "Marks every fee as a regeneration." } },
+    "src/api/legacy.ts": { "what": "Removed; the new route replaces it." },
+    "src/util/fmt.ts": { "what": "Renamed from format.ts; no code change." },
+    "src/billing/mills.test.ts": { "what": "Covers millsToDecimal." },
+    "docs/apply.md": { "what": "Documents applyChanges." }
+  },
+  "links": [
+    { "candidate": "c1", "reason": "The route calls applyChanges." },
+    { "candidate": "c2", "reason": "apply formats amounts with millsToDecimal." },
+    { "candidate": "c3", "reason": "Tests the new millsToDecimal." },
+    { "candidate": "c5", "reason": "apply consumes the new Insertion type." }
+  ],
+  "dropped": [{ "candidate": "c4", "why": "Type-only import of the unchanged Fee type." }],
+  "context": [{ "path": "src/jobs/fee-writer.ts", "what": "Another writer of fee rows; apply must produce the same shape." }],
+  "context_links": [
+    {
+      "from": "src/jobs/fee-writer.ts",
+      "to": "src/billing/apply.ts",
+      "reason": "Both write fee rows, so apply mirrors writeFee's fields.",
+      "evidence": { "path": "src/jobs/fee-writer.ts", "line": 3, "quote": "export function writeFee(fee: Fee): void {" }
+    }
+  ],
+  "missing": [{ "id": "enqueue", "name": "Enqueue regeneration", "why": "Nothing calls the route yet.", "near": "src/api/route.ts" }],
+  "trail": [
+    "src/billing/types.ts",
+    "src/billing/mills.ts",
+    "src/billing/apply.ts",
+    "src/jobs/fee-writer.ts",
+    "src/api/route.ts",
+    "src/api/legacy.ts",
+    "src/util/fmt.ts",
+    "src/billing/mills.test.ts",
+    "docs/apply.md"
+  ]
+}

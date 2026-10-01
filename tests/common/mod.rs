@@ -6,6 +6,12 @@ use std::{
     process::Command,
 };
 
+use codemapx::{
+    annotations::{self, Annotations},
+    facts::Facts,
+    map::{self, Map},
+};
+
 pub struct Sample {
     _dir: tempfile::TempDir,
     pub root: PathBuf,
@@ -73,4 +79,20 @@ pub fn assert_golden(rel: &str, actual: &str) {
     }
     let expected = fs::read_to_string(&path).unwrap_or_else(|_| panic!("{rel} missing; run with UPDATE_GOLDEN=1 and review it"));
     assert_eq!(expected, actual, "{rel} differs; rerun with UPDATE_GOLDEN=1 and review `git diff {rel}`");
+}
+
+pub fn read_branch(path: &str) -> Option<String> {
+    fs::read_to_string(sample_dir().join("branch").join(path)).ok()
+}
+
+pub fn sample_facts() -> Facts {
+    serde_json::from_str(&fs::read_to_string(sample_dir().join("expected-facts.json")).unwrap()).unwrap()
+}
+
+pub fn sample_annotations() -> Annotations {
+    annotations::parse(&fs::read_to_string(sample_dir().join("annotations.json")).unwrap()).unwrap()
+}
+
+pub fn sample_map() -> Map {
+    map::merge(&sample_facts(), &sample_annotations(), &read_branch).unwrap()
 }
