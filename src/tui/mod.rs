@@ -181,9 +181,13 @@ fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<
             Action::Quit => return Ok(()),
             Action::Open(path, line) => {
                 ratatui::restore();
-                open_editor(&path, line);
+                let (t, e) = (env::var("CODEMAPX_EDITOR").ok(), env::var("EDITOR").ok());
+                let res = open_editor(&path, line, t.as_deref(), e.as_deref());
                 *term = ratatui::init();
                 term.clear()?;
+                if let Err(e) = res {
+                    app.flash = Some(format!(" {e}"));
+                }
             }
             Action::None => {}
         }
@@ -201,8 +205,8 @@ pub fn editor_command(path: &str, line: usize, template: Option<&str>, editor: O
     argv
 }
 
-fn open_editor(path: &Path, line: usize) {
-    let (t, e) = (env::var("CODEMAPX_EDITOR").ok(), env::var("EDITOR").ok());
-    let argv = editor_command(&path.to_string_lossy(), line, t.as_deref(), e.as_deref());
-    let _ = Command::new(&argv[0]).args(&argv[1..]).status();
+/// Runs the editor and waits; Err names the command when it can't be started.
+pub fn open_editor(path: &Path, line: usize, template: Option<&str>, editor: Option<&str>) -> Result<(), String> {
+    let argv = editor_command(&path.to_string_lossy(), line, template, editor);
+    Command::new(&argv[0]).args(&argv[1..]).status().map(|_| ()).map_err(|e| format!("can't run {}: {e}", argv[0]))
 }

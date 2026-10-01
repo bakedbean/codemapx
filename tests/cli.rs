@@ -152,3 +152,23 @@ fn collecting_a_new_head_keeps_view_on_the_finished_map() {
     assert_eq!(out.status.code(), Some(1));
     assert!(text(&out.stdout).contains("src/api/aaa.ts: missing \"what\""), "{}", text(&out.stdout));
 }
+
+#[test]
+fn validate_flags_stale_annotations_alongside_problems() {
+    let s = common::sample();
+    let state = tempfile::tempdir().unwrap();
+    let old = collect_dir(&s.root, state.path());
+    fs::copy(common::sample_dir().join("annotations.json"), old.join("annotations.json")).unwrap();
+    fs::write(s.root.join("src/api/aaa.ts"), "export const a = 1;\n").unwrap();
+    common::git_out(&s.root, &["add", "-A"]);
+    common::git_out(&s.root, &["commit", "-q", "-m", "aaa"]);
+    // Not collected yet: validate checks the old map and says the facts are behind HEAD.
+    let out = bin(&s.root, state.path(), &["validate"]);
+    assert!(text(&out.stderr).contains("note: facts are for 4f5b759, HEAD is "), "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("0 problem(s)"), "{}", text(&out.stdout));
+    collect_dir(&s.root, state.path());
+    let out = bin(&s.root, state.path(), &["validate"]);
+    let o = text(&out.stdout);
+    assert!(o.contains("src/api/aaa.ts: missing \"what\"") && o.contains("(stale; update it)"), "{o}");
+    assert!(!text(&out.stderr).contains("note:"), "{}", text(&out.stderr));
+}

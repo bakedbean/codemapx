@@ -1,20 +1,28 @@
 //! Where maps live: `<root>/<repo>/<branch with / → __>/<head-sha>/{facts,annotations}.json`.
 
 use std::{
-    env, fs, io,
+    env,
+    ffi::OsString,
+    fs, io,
     path::{Path, PathBuf},
 };
 
 use crate::facts::{self, Facts};
 
 pub fn state_root() -> PathBuf {
-    if let Some(d) = env::var_os("CODEMAPX_STATE_DIR") {
+    state_root_from(env::var_os("CODEMAPX_STATE_DIR"), env::var_os("XDG_STATE_HOME"), env::var_os("HOME"))
+}
+
+/// Empty values count as unset.
+pub fn state_root_from(codemapx: Option<OsString>, xdg: Option<OsString>, home: Option<OsString>) -> PathBuf {
+    let set = |v: Option<OsString>| v.filter(|v| !v.is_empty());
+    if let Some(d) = set(codemapx) {
         return d.into();
     }
-    if let Some(d) = env::var_os("XDG_STATE_HOME") {
+    if let Some(d) = set(xdg) {
         return Path::new(&d).join("codemapx");
     }
-    PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".local/state/codemapx")
+    PathBuf::from(home.unwrap_or_default()).join(".local/state/codemapx")
 }
 
 pub fn branch_dir(root: &Path, repo: &str, branch: &str) -> PathBuf {

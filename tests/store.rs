@@ -109,3 +109,11 @@ fn view_prefers_a_finished_map_validate_prefers_exact_head() {
     assert_eq!(find("bbb"), Some(b.clone()));
     assert_eq!(find("zzz"), Some(b));
 }
+
+#[test]
+fn state_root_skips_empty_env_values() {
+    let root = |c: &str, x: &str| store::state_root_from(Some(c.into()), Some(x.into()), Some("/home/u".into()));
+    assert_eq!(root("/s", "/x"), std::path::PathBuf::from("/s"));
+    assert_eq!(root("", "/x"), std::path::PathBuf::from("/x/codemapx"));
+    assert_eq!(root("", ""), std::path::PathBuf::from("/home/u/.local/state/codemapx"));
+}

@@ -9,11 +9,12 @@ You wrote the code on this branch, so you know why each edit was needed. The use
 
 ## Steps
 
-1. Run `codemapx collect` in the worktree (add `--base <ref>` if the branch isn't based on `origin/main` or `main`). It prints a map dir. Read `<dir>/facts.json`.
-2. If `<dir>/annotations.json` already exists, it was carried over from an earlier commit. Update it rather than starting over.
-3. Write `<dir>/annotations.json` (format below).
-4. Run `codemapx validate`. Fix every problem it lists and run it again until it prints `0 problem(s)`. **Never edit `facts.json`.**
-5. Tell the user: "Map ready: run `codemapx`." Mention `codemapx html -o map.html` if they want to share it.
+1. Commit your work first. The map covers committed changes only.
+2. Run `codemapx collect` in the worktree (add `--base <ref>` if the branch isn't based on `origin/main` or `main`). It prints a map dir. Read the facts without diffs first, e.g. `jq 'del(.files[].diff)' <dir>/facts.json`, then look at individual files' diffs as you need them.
+3. If `<dir>/annotations.json` already exists, it was carried over from an earlier commit. Update it rather than starting over: set `head` to the new facts head and fix every problem validate reports. Carried link and dropped ids were remapped to the new candidate ids; a `gone:<from>-><to>` id names a pair that no longer exists, so remove it.
+4. Write `<dir>/annotations.json` (format below).
+5. Run `codemapx validate`. Fix every problem it lists and run it again until it prints `0 problem(s)`. **Never edit `facts.json`.**
+6. Tell the user: "Map ready: run `codemapx`." Mention `codemapx html -o map.html` if they want to share it.
 
 ## What to write
 
@@ -24,7 +25,7 @@ You wrote the code on this branch, so you know why each edit was needed. The use
   - Drop it with a `why` when the import is incidental, e.g. a type-only import of something unchanged.
 - `"context"`: unchanged files you read during the session that shaped the edits, such as another writer of the same rows or the caller whose contract you kept. Only include ones that matter.
 - `"context_links"`: link each context card to the file it shaped. `evidence` must quote a real line of the file at HEAD, as `{ "path", "line", "quote" }`, and the validator checks the quote against that line.
-- `"missing"`: things the branch references but nobody built yet, e.g. a job nothing enqueues. Give each an `id`, a `name`, a `why`, and `near` (a changed file).
+- `"missing"`: things the branch references but nobody built yet, e.g. a job nothing enqueues. Give each an `id`, a `name`, a `why`, and `near` (a changed file). Ids must be unique and must not equal any file path.
 - `"trail"`: the reading order, every changed file once, plus any context cards worth reading in sequence. Start where the story starts, which is usually the contract that everything else follows from.
 - `"title"` and `"summary"`: one line each, for the header.
 - `"head"`: copy it from facts.json.

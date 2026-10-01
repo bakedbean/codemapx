@@ -177,3 +177,9 @@ fn tall_columns_scroll_and_leave_room_for_the_diff() {
     // Columns without the selection show their top.
     assert!(frame.contains("APPLY") && frame.contains("apply.ts"), "{frame}");
 }
+
+#[test]
+fn editor_spawn_failure_is_an_error() {
+    let err = tui::open_editor(std::path::Path::new("/a.ts"), 3, Some("codemapx-no-such-editor {path}"), None).unwrap_err();
+    assert!(err.contains("codemapx-no-such-editor"), "{err}");
+}

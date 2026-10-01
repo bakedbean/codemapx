@@ -89,18 +89,30 @@ fn cmd_validate(path: Option<PathBuf>) -> ExitCode {
         Ok(l) => l,
         Err(e) => return fail(1, e),
     };
+    let stale = format!("annotations.json: written for {}, facts are at {} (stale; update it)", loaded.annotations.head, loaded.facts.head);
     let problems = match load::merge(&git, &loaded) {
-        Ok(m) if m.annotations_stale => {
-            vec![format!("annotations.json: written for {}, facts are at {} (stale; update it)", loaded.annotations.head, loaded.facts.head)]
-        }
+        Ok(m) if m.annotations_stale => vec![stale],
         Ok(_) => vec![],
-        Err(p) => p,
+        Err(mut p) => {
+            if loaded.annotations.head != loaded.facts.head {
+                p.push(stale);
+            }
+            p
+        }
     };
+    let head = git.head().unwrap_or_default();
+    if loaded.facts.head != head {
+        eprintln!("note: facts are for {}, HEAD is {}; run codemapx collect", short(&loaded.facts.head), short(&head));
+    }
     for p in &problems {
         println!("{p}");
     }
     println!("{} problem(s)", problems.len());
     if problems.is_empty() { ExitCode::SUCCESS } else { ExitCode::from(1) }
+}
+
+fn short(sha: &str) -> &str {
+    &sha[..sha.len().min(7)]
 }
 
 fn cmd_view(path: Option<PathBuf>, snapshot: &[String], width: u16, height: u16) -> ExitCode {

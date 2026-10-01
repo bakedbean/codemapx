@@ -82,13 +82,13 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
     }
     let decl_name = name(node);
     out.push(Decl { name: decl_name.clone(), kind, start, end, exported });
-    if kind == "class" {
-        if let Some(body) = node.child_by_field_name("body") {
-            let mut c = body.walk();
-            for m in body.named_children(&mut c).filter(|m| m.kind() == "method_definition") {
-                let (s, e) = lines(m);
-                out.push(Decl { name: format!("{decl_name}.{}", name(m)), kind: "method", start: s, end: e, exported: false });
-            }
+    if kind == "class"
+        && let Some(body) = node.child_by_field_name("body")
+    {
+        let mut c = body.walk();
+        for m in body.named_children(&mut c).filter(|m| m.kind() == "method_definition") {
+            let (s, e) = lines(m);
+            out.push(Decl { name: format!("{decl_name}.{}", name(m)), kind: "method", start: s, end: e, exported: false });
         }
     }
 }
