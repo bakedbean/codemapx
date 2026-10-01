@@ -5,3 +5,4 @@ pub mod diff;
 pub mod facts;
 pub mod git;
 pub mod paths;
+pub mod store;
