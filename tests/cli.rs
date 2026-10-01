@@ -134,3 +134,21 @@ fn carried_annotations_keep_reasons_on_their_pairs() {
     assert_ne!(old, new);
     assert_eq!(pairs(&new, &new), pairs(&old, &old));
 }
+
+#[test]
+fn collecting_a_new_head_keeps_view_on_the_finished_map() {
+    let s = common::sample();
+    let state = tempfile::tempdir().unwrap();
+    let old = collect_dir(&s.root, state.path());
+    fs::copy(common::sample_dir().join("annotations.json"), old.join("annotations.json")).unwrap();
+    fs::write(s.root.join("src/api/aaa.ts"), "import { applyChanges } from '../billing/apply';\n\nexport const run = () => applyChanges([]);\n").unwrap();
+    common::git_out(&s.root, &["add", "-A"]);
+    common::git_out(&s.root, &["commit", "-q", "-m", "aaa"]);
+    collect_dir(&s.root, state.path());
+    let out = bin(&s.root, state.path(), &["view", "--snapshot", "src/billing/apply.ts"]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("map is 1 commit behind HEAD — run /codemapx in the agent session"), "{}", text(&out.stdout));
+    let out = bin(&s.root, state.path(), &["validate"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(text(&out.stdout).contains("src/api/aaa.ts: missing \"what\""), "{}", text(&out.stdout));
+}

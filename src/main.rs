@@ -85,7 +85,7 @@ fn cmd_validate(path: Option<PathBuf>) -> ExitCode {
         Ok(g) => g,
         Err(e) => return fail(2, e),
     };
-    let loaded = match load::load(&git) {
+    let loaded = match load::load(&git, true) {
         Ok(l) => l,
         Err(e) => return fail(1, e),
     };
@@ -108,7 +108,7 @@ fn cmd_view(path: Option<PathBuf>, snapshot: &[String], width: u16, height: u16)
         Ok(g) => g,
         Err(e) => return fail(2, e),
     };
-    let loaded = match load::load(&git) {
+    let loaded = match load::load(&git, false) {
         Ok(l) => l,
         Err(e) => return fail(1, e),
     };
@@ -149,7 +149,7 @@ fn cmd_html(path: Option<PathBuf>, out: &std::path::Path) -> ExitCode {
         Ok(g) => g,
         Err(e) => return fail(2, e),
     };
-    let map = match load::load(&git).map_err(|e| vec![e]).and_then(|l| load::merge(&git, &l)) {
+    let map = match load::load(&git, false).map_err(|e| vec![e]).and_then(|l| load::merge(&git, &l)) {
         Ok(m) => m,
         Err(ps) => {
             for p in &ps {

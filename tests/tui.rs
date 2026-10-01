@@ -147,9 +147,9 @@ fn banners_for_stale_maps() {
     let mut a = app();
     assert_eq!(a.banner(), None);
     a.behind = Some(2);
-    assert_eq!(a.banner().as_deref(), Some("map is 2 commits behind HEAD — run codemapx collect"));
+    assert_eq!(a.banner().as_deref(), Some("map is 2 commits behind HEAD — run /codemapx in the agent session"));
     a.behind = Some(0);
-    assert_eq!(a.banner().as_deref(), Some("map was made for a different commit — run codemapx collect"));
+    assert_eq!(a.banner().as_deref(), Some("map was made for a different commit — run /codemapx in the agent session"));
     a.behind = None;
     a.map.annotations_stale = true;
     assert!(a.banner().unwrap().contains("/codemapx"));

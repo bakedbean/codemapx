@@ -87,3 +87,25 @@ fn carries_from_the_newest_map_with_annotations() {
     let c = store::save_facts(root.path(), &facts("ccc")).unwrap();
     assert_eq!(fs::read_to_string(c.join("annotations.json")).unwrap(), "{\"from\":\"aaa\"}");
 }
+
+#[test]
+fn view_prefers_a_finished_map_validate_prefers_exact_head() {
+    let root = tempfile::tempdir().unwrap();
+    let a = store::save_facts(root.path(), &facts("aaa")).unwrap();
+    touch(&a.join("facts.json"), 100);
+    let find = |head: &str| store::find_map(root.path(), "sample", "feature/12-apply-fees", head);
+    let find_exact = |head: &str| store::find_map_for_validate(root.path(), "sample", "feature/12-apply-fees", head);
+    // Nothing annotated: exact head, so load can say "no annotations.json".
+    let b = store::save_facts(root.path(), &facts("bbb")).unwrap();
+    assert_eq!(find("bbb"), Some(b.clone()));
+    // Only aaa annotated: view uses it; validate still checks bbb.
+    fs::write(a.join("annotations.json"), "{\"head\":\"aaa\"}").unwrap();
+    assert_eq!(find("bbb"), Some(a.clone()));
+    assert_eq!(find_exact("bbb"), Some(b.clone()));
+    // bbb carries aaa's annotations but the agent hasn't updated them: still aaa.
+    fs::write(b.join("annotations.json"), "{\"head\":\"aaa\"}").unwrap();
+    assert_eq!(find("bbb"), Some(a.clone()));
+    fs::write(b.join("annotations.json"), "{\"head\":\"bbb\"}").unwrap();
+    assert_eq!(find("bbb"), Some(b.clone()));
+    assert_eq!(find("zzz"), Some(b));
+}

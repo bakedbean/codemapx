@@ -206,7 +206,8 @@ prototype's `main.rs` is split into `tui/{app, map_pane, link_panes, diff_pane, 
   so resizing works live. Below 100 columns, only "terminal too narrow (need 100)" is shown.
   Tests and Docs columns are identified by name (case-insensitive `tests` / `docs`).
 - **Stale banner.** When the map's HEAD isn't the worktree's HEAD: `map is N commits behind HEAD —
-  run codemapx collect`.
+  run /codemapx in the agent session`. View and html use the newest finished map (annotations
+  written for its head) until the agent finishes one for HEAD; validate checks the exact-HEAD map.
 
 ### HTML
 

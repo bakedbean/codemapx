@@ -74,8 +74,38 @@ fn newest(branch_dir: &Path, keep: impl Fn(&PathBuf) -> bool) -> Option<PathBuf>
         .map(|(_, p)| p)
 }
 
+/// The map view/html show: prefer a finished map (annotations written for its own head), then any
+/// annotated map, exact HEAD first each time; else the exact/newest dir so load reports what's missing.
 pub fn find_map(root: &Path, repo: &str, branch: &str, head: &str) -> Option<PathBuf> {
     let b = branch_dir(root, repo, branch);
-    let exact = b.join(head);
-    if exact.join("facts.json").exists() { Some(exact) } else { newest_map(&b) }
+    let exact = Some(b.join(head)).filter(|e| e.join("facts.json").exists());
+    for want in [Ann::Finished, Ann::Carried] {
+        if let Some(e) = exact.as_ref().filter(|e| ann_state(e) == want) {
+            return Some(e.clone());
+        }
+        if let Some(d) = newest(&b, |p| ann_state(p) == want) {
+            return Some(d);
+        }
+    }
+    exact.or_else(|| newest_map(&b))
+}
+
+/// validate checks the exact-HEAD map when there is one, so the agent's loop sees its own edits.
+pub fn find_map_for_validate(root: &Path, repo: &str, branch: &str, head: &str) -> Option<PathBuf> {
+    let exact = branch_dir(root, repo, branch).join(head);
+    if exact.join("facts.json").exists() { Some(exact) } else { find_map(root, repo, branch, head) }
+}
+
+#[derive(PartialEq)]
+enum Ann {
+    None,
+    Carried,
+    Finished,
+}
+
+// A dir is named for its facts' head, so annotations for that head are finished.
+fn ann_state(dir: &Path) -> Ann {
+    let Ok(text) = fs::read_to_string(dir.join("annotations.json")) else { return Ann::None };
+    let head = serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v["head"].as_str().map(String::from));
+    if head.as_deref().is_some_and(|h| dir.file_name().is_some_and(|n| n == h)) { Ann::Finished } else { Ann::Carried }
 }

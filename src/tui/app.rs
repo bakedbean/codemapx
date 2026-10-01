@@ -210,8 +210,8 @@ impl App {
     /// Stale-map warning shown under the header, if any.
     pub fn banner(&self) -> Option<String> {
         match self.behind {
-            Some(n) if n > 0 => Some(format!("map is {n} commit{} behind HEAD — run codemapx collect", if n == 1 { "" } else { "s" })),
-            Some(_) => Some("map was made for a different commit — run codemapx collect".into()),
+            Some(n) if n > 0 => Some(format!("map is {n} commit{} behind HEAD — run /codemapx in the agent session", if n == 1 { "" } else { "s" })),
+            Some(_) => Some("map was made for a different commit — run /codemapx in the agent session".into()),
             None if self.map.annotations_stale => Some("annotations were written for an older commit — run /codemapx to refresh them".into()),
             None => None,
         }
