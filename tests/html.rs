@@ -11,6 +11,13 @@ fn embeds_the_map_and_title() {
 }
 
 #[test]
+fn starts_with_doctype_and_charset() {
+    let out = html::render(&common::sample_map());
+    assert!(out.starts_with("<!doctype html>"), "{}", &out[..80]);
+    assert!(out.contains("charset=\"utf-8\"") && out.contains("name=\"viewport\""));
+}
+
+#[test]
 fn escapes_script_breakouts() {
     let mut m = common::sample_map();
     m.cards[0].what = "</script><script>alert(1)</script>".into();
