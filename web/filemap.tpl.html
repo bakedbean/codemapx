@@ -1,0 +1,278 @@
+<title>/*TITLE*/</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: file map on top (columns = causal order), trace panel below (why + links + outline + diff). Colour only marks the selected trace. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #1c2230;
+  --muted: #6a7384;
+  --faint: #c9ced8;
+  --rule: #e2e5eb;
+  --accent: #2f5bd3;
+  --from: #8a5a00;
+  --add: #2b7a3b;
+  --del: #b42626;
+  --add-bg: #2b7a3b14;
+  --del-bg: #b4262612;
+  --flash: #2f5bd326;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111419; --surface: #191d25; --ink: #e3e7ee; --muted: #8f99aa; --faint: #3a4250; --rule: #262c37;
+    --accent: #84a2ff; --from: #e0b157; --add: #6fcf7f; --del: #ff8a8a; --add-bg: #6fcf7f14; --del-bg: #ff8a8a12; --flash: #84a2ff30;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111419; --surface: #191d25; --ink: #e3e7ee; --muted: #8f99aa; --faint: #3a4250; --rule: #262c37;
+  --accent: #84a2ff; --from: #e0b157; --add: #6fcf7f; --del: #ff8a8a; --add-bg: #6fcf7f14; --del-bg: #ff8a8a12; --flash: #84a2ff30;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font: 14px/1.55 var(--f-body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 64px; display: grid; gap: 20px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font: 500 12px/1.4 var(--f-mono); color: var(--muted); }
+h1 { font: 600 22px/1.25 var(--f-body); margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 80ch; }
+code { font-family: var(--f-mono); font-size: .9em; }
+
+/* map */
+.map-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
+.map { position: relative; min-width: 1120px; padding: 16px 20px 20px; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); column-gap: 44px; }
+.col { display: flex; flex-direction: column; gap: 8px; position: relative; z-index: 1; }
+.col-h { font: 500 11px/1 var(--f-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 2px 0 6px; }
+.card { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 2px; padding: 7px 9px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); transition: opacity .15s, border-color .15s; }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.card .n { font: 500 12.5px/1.3 var(--f-mono); overflow-wrap: anywhere; min-width: 0; }
+.card .d { font: 11px/1.3 var(--f-mono); color: var(--muted); overflow-wrap: anywhere; }
+.card .s { font: 11px/1 var(--f-mono); font-variant-numeric: tabular-nums; display: flex; gap: 6px; }
+.s .a { color: var(--add); } .s .r { color: var(--del); }
+.card .step { font: 500 10px/1 var(--f-mono); color: var(--muted); white-space: nowrap; }
+.card.ghost { border-style: dashed; background: transparent; }
+.card.ghost .n { color: var(--muted); }
+.card .tag { font: 500 10px/1 var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.map.focus .card { opacity: .35; }
+.map.focus .card.sel, .map.focus .card.in, .map.focus .card.out { opacity: 1; }
+.card.sel { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.card.out { border-color: var(--accent); }
+.card.in { border-color: var(--from); }
+svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: visible; }
+svg.edges path { fill: none; stroke: var(--faint); stroke-width: 1.2; transition: opacity .15s; }
+svg.edges path.ghost { stroke-dasharray: 3 3; }
+.map.focus svg.edges path { opacity: .25; }
+.map.focus svg.edges path.out { stroke: var(--accent); stroke-width: 1.8; opacity: 1; }
+.map.focus svg.edges path.in { stroke: var(--from); stroke-width: 1.8; opacity: 1; }
+
+/* trace panel */
+.trace { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 820px) { .trace { grid-template-columns: 1fr; } }
+.side { display: grid; gap: 14px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px); overflow-y: auto; }
+@media (max-width: 820px) { .side { position: static; max-height: none; } }
+.box { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 14px; display: grid; gap: 8px; min-width: 0; }
+.path { font: 500 13px/1.4 var(--f-mono); overflow-wrap: anywhere; }
+.what { margin: 0; }
+.nav { display: flex; gap: 8px; align-items: center; }
+.nav button { font: 500 13px/1 var(--f-body); color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+.nav button:hover, .nav button:focus-visible { border-color: var(--accent); outline: none; }
+.nav button:disabled { opacity: .4; cursor: default; }
+.nav .pos { font: 12px/1 var(--f-mono); color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+.lbl { font: 500 11px/1 var(--f-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.lbl.in { color: var(--from); } .lbl.out { color: var(--accent); }
+.links { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.links button { all: unset; cursor: pointer; font: 500 12.5px/1.3 var(--f-mono); border-bottom: 1px solid currentColor; }
+.links button:focus-visible { outline: 2px solid var(--accent); }
+.links.in button { color: var(--from); } .links.out button { color: var(--accent); }
+.links.outline button { color: var(--ink); }
+.links .ln { font: 11px/1 var(--f-mono); color: var(--muted); margin-left: 6px; }
+.links p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.none { color: var(--muted); font-size: 13px; margin: 0; }
+.diff { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; min-width: 0; }
+.diff h3 { margin: 0; padding: 8px 12px; font: 500 12px/1.4 var(--f-mono); color: var(--muted); border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+.diff pre { margin: 0; padding: 8px 0; overflow-x: auto; font: 12.5px/1.55 var(--f-mono); }
+.diff pre span { display: block; padding-right: 12px; white-space: pre; min-width: max-content; }
+.diff pre span::before { content: attr(data-n); display: inline-block; width: 4ch; padding: 0 10px 0 8px; text-align: right; color: var(--muted); opacity: .6; user-select: none; }
+.diff .l-a { background: var(--add-bg); color: var(--add); }
+.diff .l-r { background: var(--del-bg); color: var(--del); }
+.diff .l-h { color: var(--muted); padding-top: 6px; }
+.diff .flash { background: var(--flash); }
+.ghost-note { padding: 16px; color: var(--muted); }
+.hint { font-size: 12px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="h1"></h1>
+    <p>An arrow means an edit in one file made an edit in the next one necessary. Dashed cards are files this branch didn't change but its edits depend on. Pick a file to see what led to it and what it leads to, or follow the steps with Next.</p>
+  </header>
+
+  <div class="map-scroll"><div class="map focus" id="map"><svg class="edges" id="edges" aria-hidden="true"></svg></div></div>
+
+  <div class="trace">
+    <div class="side">
+      <div class="box">
+        <div class="nav"><button id="prev" type="button">← Prev step</button><button id="next" type="button">Next step →</button><span class="pos" id="pos"></span></div>
+        <div class="path" id="path"></div>
+        <p class="what" id="what"></p>
+      </div>
+      <div class="box" id="outline-box" hidden><div class="lbl">Inside this file</div><ul class="links outline" id="outline"></ul></div>
+      <div class="box"><div class="lbl in">Came from</div><ul class="links in" id="ins"></ul></div>
+      <div class="box"><div class="lbl out">Leads to</div><ul class="links out" id="outs"></ul></div>
+      <div class="hint">Keys: ← → step through the edits.</div>
+    </div>
+    <div id="diffs" style="display:grid; gap:12px; min-width:0"></div>
+  </div>
+</div>
+
+<script>
+const DIFFS = /*DIFFS*/;
+const CONFIG = /*CONFIG*/;
+const { COLS, NODES, EDGES, TRAIL, PREFIX: A } = CONFIG;
+
+const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
+const $ = id => document.getElementById(id);
+const map = $('map'), svg = $('edges');
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const stats = n => (n.paths || []).reduce((t, p) => ({ a: t.a + (DIFFS[p]?.add || 0), r: t.r + (DIFFS[p]?.del || 0) }), { a: 0, r: 0 });
+const short = p => p.startsWith(A) ? p.slice(A.length) : p;
+
+$('eyebrow').textContent = CONFIG.eyebrow;
+$('h1').textContent = CONFIG.title;
+map.style.setProperty('--cols', COLS.length);
+
+COLS.forEach((title, c) => {
+  const col = document.createElement('div');
+  col.className = 'col';
+  col.innerHTML = `<div class="col-h">${esc(title)}</div>`;
+  NODES.filter(n => n.col === c).forEach(n => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = 'card-' + n.id;
+    if (n.ghost) {
+      b.className = 'card ghost';
+      b.innerHTML = `<span class="top"><span class="n">${esc(n.name)}</span><span class="tag">${esc(n.ghost)}</span></span><span class="d">${esc(n.dir)}</span>`;
+    } else {
+      const s = stats(n), step = TRAIL.indexOf(n.id) + 1;
+      b.className = 'card';
+      b.innerHTML = `<span class="top"><span class="n">${esc(n.name)}</span>${step ? `<span class="step">step ${step}</span>` : ''}</span><span class="d">${esc(n.dir)}</span><span class="s">${s.a ? `<span class="a">+${s.a}</span>` : ''}${s.r ? `<span class="r">−${s.r}</span>` : ''}</span>`;
+    }
+    b.addEventListener('click', () => select(n.id));
+    col.appendChild(b);
+  });
+  map.appendChild(col);
+});
+
+function drawEdges() {
+  const box = map.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+  svg.innerHTML = EDGES.map(([f, t], i) => {
+    const a = $('card-' + f).getBoundingClientRect(), b = $('card-' + t).getBoundingClientRect();
+    const ay = a.top + a.height / 2 - box.top, by = b.top + b.height / 2 - box.top;
+    let d;
+    if (byId[f].col === byId[t].col) {
+      const x = a.right - box.left, bend = 22;
+      d = `M${x} ${ay} C${x + bend} ${ay}, ${x + bend} ${by}, ${x} ${by}`;
+    } else if (byId[f].col > byId[t].col) {
+      const x1 = a.left - box.left, x2 = b.right - box.left, mx = (x1 + x2) / 2;
+      d = `M${x1} ${ay} C${mx} ${ay}, ${mx} ${by}, ${x2} ${by}`;
+    } else {
+      const x1 = a.right - box.left, x2 = b.left - box.left, mx = (x1 + x2) / 2;
+      d = `M${x1} ${ay} C${mx} ${ay}, ${mx} ${by}, ${x2} ${by}`;
+    }
+    const ghost = byId[f].ghost || byId[t].ghost ? ' class="ghost"' : '';
+    return `<path data-i="${i}" d="${d}"${ghost}/>`;
+  }).join('');
+  paint();
+}
+
+let cur = TRAIL[0];
+function paint() {
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('sel', 'in', 'out'));
+  $('card-' + cur).classList.add('sel');
+  svg.querySelectorAll('path').forEach(p => {
+    const [f, t] = EDGES[+p.dataset.i];
+    p.classList.toggle('out', f === cur);
+    p.classList.toggle('in', t === cur);
+    if (f === cur) $('card-' + t).classList.add('out');
+    if (t === cur) $('card-' + f).classList.add('in');
+  });
+}
+
+function linkList(el, items) {
+  el.innerHTML = items.length ? '' : '<li class="none">Nothing in this branch.</li>';
+  items.forEach(([id, why]) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<button type="button">${esc(byId[id].name)}</button><p>${esc(why)}</p>`;
+    li.querySelector('button').addEventListener('click', () => select(id));
+    el.appendChild(li);
+  });
+}
+
+// Numbers each context/added line with its line in the branch's version of the file.
+function renderDiff(text, key) {
+  let n = 0;
+  return text.split('\n').map(l => {
+    const h = l.match(/^@@ -\d+(?:,\d+)? \+(\d+)/);
+    if (h) { n = +h[1]; return `<span class="l-h" data-n="">${esc(l)}</span>`; }
+    if (l.startsWith('-')) return `<span class="l-r" data-n="">${esc(l)}</span>`;
+    const cls = l.startsWith('+') ? 'l-a' : '';
+    const out = `<span class="${cls}" data-n="${n}" id="${key}-L${n}">${esc(l) || ' '}</span>`;
+    n++;
+    return out;
+  }).join('');
+}
+
+function jumpTo(key, line) {
+  const el = $(`${key}-L${line}`);
+  if (!el) return;
+  el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  let x = el, k = 0;
+  while (x && k < 3) { x.classList.add('flash'); const y = x; setTimeout(() => y.classList.remove('flash'), 1600); x = x.nextElementSibling; k++; }
+}
+
+function select(id) {
+  cur = id;
+  const n = byId[id], i = TRAIL.indexOf(id);
+  $('path').textContent = n.ghost ? n.ref : (n.paths.length > 1 ? `${n.dir} (${n.paths.length} files)` : short(n.paths[0]));
+  $('what').textContent = n.what;
+  $('pos').textContent = i >= 0 ? `step ${i + 1} of ${TRAIL.length}` : n.ghost;
+  $('prev').disabled = i <= 0;
+  $('next').disabled = i < 0 || i === TRAIL.length - 1;
+  linkList($('ins'), EDGES.filter(e => e[1] === id).map(e => [e[0], e[2]]));
+  linkList($('outs'), EDGES.filter(e => e[0] === id).map(e => [e[1], e[2]]));
+
+  const key = 'f-' + id;
+  $('outline-box').hidden = !n.outline;
+  $('outline').innerHTML = '';
+  (n.outline || []).forEach(([name, line, why]) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<button type="button">${esc(name)}</button><span class="ln">L${line}</span><p>${esc(why)}</p>`;
+    li.querySelector('button').addEventListener('click', () => jumpTo(key, line));
+    $('outline').appendChild(li);
+  });
+
+  $('diffs').innerHTML = n.ghost
+    ? `<div class="diff"><h3>${esc(n.ref)}</h3><div class="ghost-note">Not changed in this branch. Shown because edits here depend on it.</div></div>`
+    : n.paths.map((p, j) => `<div class="diff"><h3>${esc(short(p))}</h3><pre>${renderDiff(DIFFS[p]?.diff || '', j ? key + j : key)}</pre></div>`).join('');
+  paint();
+  try { localStorage.setItem('fm-cur', id); } catch (e) {}
+}
+
+const step = d => { const i = TRAIL.indexOf(cur); const j = i < 0 ? 0 : i + d; if (j >= 0 && j < TRAIL.length) select(TRAIL[j]); };
+$('prev').addEventListener('click', () => step(-1));
+$('next').addEventListener('click', () => step(1));
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea')) return;
+  if (e.key === 'ArrowRight') { step(1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft') { step(-1); e.preventDefault(); }
+});
+
+try { const s = localStorage.getItem('fm-cur'); if (s && byId[s]) cur = s; } catch (e) {}
+select(cur);
+drawEdges();
+new ResizeObserver(drawEdges).observe(map);
+document.fonts?.ready.then(drawEdges);
+</script>
