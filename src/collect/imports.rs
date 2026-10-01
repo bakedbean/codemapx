@@ -68,46 +68,74 @@ fn collect_names(node: Node, src: &str, out: &mut Vec<ImportName>) {
     }
 }
 
-/// `compilerOptions.baseUrl`/`paths` of one tsconfig.json; `extends` is not followed.
-#[derive(Debug, Default, PartialEq)]
+/// Effective `compilerOptions.baseUrl`/`paths` of a tsconfig.json after following relative `extends`.
+#[derive(Debug, Default, Clone, PartialEq)]
 struct TsPaths {
-    base: String,
-    base_url_set: bool,
-    patterns: Vec<(String, Vec<String>)>,
+    /// baseUrl, resolved against the tsconfig that sets it.
+    base_url: Option<String>,
+    /// Dir of the tsconfig that sets `paths`; targets resolve here when there's no baseUrl.
+    paths_dir: String,
+    patterns: Option<Vec<(String, Vec<String>)>>,
 }
 
 impl TsPaths {
-    fn parse(dir: &str, text: &str) -> Option<TsPaths> {
+    /// `seen` is the chain of files being extended, so cycles stop.
+    fn parse(file: &str, text: &str, read: &dyn Fn(&str) -> Option<String>, seen: &mut Vec<String>) -> Option<TsPaths> {
         let v: serde_json::Value = serde_json::from_str(&strip_jsonc(text)).ok()?;
+        seen.push(file.to_string());
+        let dir = parent(file);
+        let extends = match &v["extends"] {
+            serde_json::Value::String(e) => vec![e.as_str()],
+            serde_json::Value::Array(a) => a.iter().filter_map(|e| e.as_str()).collect(),
+            _ => vec![],
+        };
+        // Later entries override earlier ones; package (non-relative) extends are skipped.
+        let mut ts = TsPaths::default();
+        for e in extends.into_iter().filter(|e| e.starts_with("./") || e.starts_with("../")) {
+            let path = normalize(&join(dir, e));
+            let found = [path.clone(), format!("{path}.json")].into_iter().find_map(|p| read(&p).map(|t| (p, t)));
+            let Some((p, t)) = found.filter(|(p, _)| !seen.contains(p)) else { continue };
+            if let Some(parent_ts) = TsPaths::parse(&p, &t, read, seen) {
+                ts.overlay(parent_ts);
+            }
+        }
         let opts = &v["compilerOptions"];
-        let base_url = opts["baseUrl"].as_str();
-        let patterns = opts["paths"]
-            .as_object()
-            .map(|m| {
-                m.iter()
-                    .map(|(k, t)| {
-                        let targets = t.as_array().map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect()).unwrap_or_default();
-                        (k.clone(), targets)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        Some(TsPaths { base: normalize(&join(dir, base_url.unwrap_or("."))), base_url_set: base_url.is_some(), patterns })
+        if let Some(b) = opts["baseUrl"].as_str() {
+            ts.base_url = Some(normalize(&join(dir, b)));
+        }
+        if let Some(m) = opts["paths"].as_object() {
+            ts.paths_dir = dir.to_string();
+            let targets = |t: &serde_json::Value| t.as_array().map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect()).unwrap_or_default();
+            ts.patterns = Some(m.iter().map(|(k, t)| (k.clone(), targets(t))).collect());
+        }
+        seen.pop();
+        Some(ts)
+    }
+
+    fn overlay(&mut self, other: TsPaths) {
+        if other.base_url.is_some() {
+            self.base_url = other.base_url;
+        }
+        if other.patterns.is_some() {
+            self.paths_dir = other.paths_dir;
+            self.patterns = other.patterns;
+        }
     }
 
     fn candidates(&self, spec: &str) -> Vec<String> {
         let mut out = vec![];
-        for (pat, targets) in &self.patterns {
+        for (pat, targets) in self.patterns.iter().flatten() {
             let star = match pat.split_once('*') {
                 Some((pre, suf)) => spec.strip_prefix(pre).and_then(|r| r.strip_suffix(suf)),
                 None => (pat == spec).then_some(""),
             };
             if let Some(star) = star {
-                out.extend(targets.iter().map(|t| normalize(&join(&self.base, &t.replacen('*', star, 1)))));
+                let base = self.base_url.as_deref().unwrap_or(&self.paths_dir);
+                out.extend(targets.iter().map(|t| normalize(&join(base, &t.replacen('*', star, 1)))));
             }
         }
-        if self.base_url_set {
-            out.push(normalize(&join(&self.base, spec)));
+        if let Some(base) = &self.base_url {
+            out.push(normalize(&join(base, spec)));
         }
         out
     }
@@ -142,8 +170,9 @@ impl<'a> Resolver<'a> {
                 break hit.clone();
             }
             walked.push(d.clone());
-            if let Some(text) = (self.read)(&join(&d, "tsconfig.json")) {
-                break TsPaths::parse(&d, &text).map(Rc::new);
+            let file = join(&d, "tsconfig.json");
+            if let Some(text) = (self.read)(&file) {
+                break TsPaths::parse(&file, &text, self.read, &mut vec![]).map(Rc::new);
             }
             if d.is_empty() {
                 break None;
@@ -171,7 +200,7 @@ fn with_extensions(base: &str) -> Vec<String> {
 
 /// tsconfig.json allows comments and trailing commas; serde_json doesn't.
 pub fn strip_jsonc(text: &str) -> String {
-    let c: Vec<char> = text.chars().collect();
+    let c: Vec<char> = text.trim_start_matches('\u{feff}').chars().collect();
     let mut out: Vec<char> = Vec::with_capacity(c.len());
     let (mut i, mut in_str) = (0, false);
     while i < c.len() {
@@ -286,6 +315,32 @@ mod tests {
         r.resolve("a/b/c/d/e.ts", "@/billing/types", &|p| files.contains(&p));
         r.resolve("a/b/x.ts", "@/billing/types", &|p| files.contains(&p));
         assert_eq!(*reads.borrow(), first);
+    }
+
+    fn read_mono(p: &str) -> Option<String> {
+        match p {
+            "tsconfig.base.json" => Some("{ \"compilerOptions\": { \"baseUrl\": \".\", \"paths\": { \"@lib/*\": [\"libs/*\"] } } }".into()),
+            "apps/web/tsconfig.json" => Some("{ \"extends\": \"../../tsconfig.base.json\" }".into()),
+            "apps/api/tsconfig.json" => Some("{ \"extends\": [\"pkg/tsconfig\", \"./tsconfig.mid\"], \"compilerOptions\": { \"baseUrl\": \"src\" } }".into()),
+            "apps/api/tsconfig.mid.json" => Some("{ \"extends\": \"../../tsconfig.base.json\", \"compilerOptions\": { \"paths\": { \"#/*\": [\"./x/*\"] } } }".into()),
+            "apps/loop/tsconfig.json" => Some("{ \"extends\": \"./tsconfig.json\", \"compilerOptions\": { \"paths\": { \"%/*\": [\"./*\"] } } }".into()),
+            "apps/bom/tsconfig.json" => Some("\u{feff}{ \"compilerOptions\": { \"paths\": { \"!/*\": [\"./*\"] } } }".into()),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn follows_relative_extends_chains() {
+        let files = ["libs/x.ts", "apps/api/src/y.ts", "apps/api/src/x/z.ts", "apps/loop/l.ts", "apps/bom/b.ts"];
+        let r = Resolver::new(&read_mono);
+        let res = |from: &str, spec: &str| r.resolve(from, spec, &|p| files.contains(&p));
+        assert_eq!(res("apps/web/src/a.ts", "@lib/x").as_deref(), Some("libs/x.ts"));
+        // Child baseUrl overrides the base's; paths come from the mid config and resolve against the child baseUrl.
+        assert_eq!(res("apps/api/a.ts", "y").as_deref(), Some("apps/api/src/y.ts"));
+        assert_eq!(res("apps/api/a.ts", "#/z").as_deref(), Some("apps/api/src/x/z.ts"));
+        assert_eq!(res("apps/api/a.ts", "@lib/x"), None);
+        assert_eq!(res("apps/loop/a.ts", "%/l").as_deref(), Some("apps/loop/l.ts"));
+        assert_eq!(res("apps/bom/a.ts", "!/b").as_deref(), Some("apps/bom/b.ts"));
     }
 
     #[test]
