@@ -133,23 +133,28 @@ impl<'a> Resolver<'a> {
         bases.iter().find_map(|b| with_extensions(b).into_iter().find(|p| exists(p)))
     }
 
-    // Nearest tsconfig.json at or above `dir`.
+    // Nearest tsconfig.json at or above `dir`; every dir walked is cached, misses included.
     fn tsconfig_for(&self, dir: &str) -> Option<Rc<TsPaths>> {
         let mut d = dir.to_string();
-        loop {
+        let mut walked = vec![];
+        let found = loop {
             if let Some(hit) = self.cache.borrow().get(&d) {
-                return hit.clone();
+                break hit.clone();
             }
+            walked.push(d.clone());
             if let Some(text) = (self.read)(&join(&d, "tsconfig.json")) {
-                let parsed = TsPaths::parse(&d, &text).map(Rc::new);
-                self.cache.borrow_mut().insert(d, parsed.clone());
-                return parsed;
+                break TsPaths::parse(&d, &text).map(Rc::new);
             }
             if d.is_empty() {
-                return None;
+                break None;
             }
             d = parent(&d).to_string();
+        };
+        let mut cache = self.cache.borrow_mut();
+        for w in walked {
+            cache.insert(w, found.clone());
         }
+        found
     }
 }
 
@@ -265,6 +270,22 @@ mod tests {
         assert_eq!(resolve("src/api/route.ts", "@/billing/types", &files).as_deref(), Some("src/billing/types.ts"));
         assert_eq!(resolve("apps/web/src/a.ts", "~/src/b", &files).as_deref(), Some("apps/web/src/b.tsx"));
         assert_eq!(resolve("src/api/route.ts", "react", &files), None);
+    }
+
+    #[test]
+    fn caches_tsconfig_misses_for_every_dir_walked() {
+        let reads = RefCell::new(0);
+        let counted = |p: &str| {
+            *reads.borrow_mut() += 1;
+            read(p)
+        };
+        let r = Resolver::new(&counted);
+        let files = ["src/billing/types.ts"];
+        assert_eq!(r.resolve("a/b/c/d/e.ts", "@/billing/types", &|p| files.contains(&p)).as_deref(), Some("src/billing/types.ts"));
+        let first = *reads.borrow();
+        r.resolve("a/b/c/d/e.ts", "@/billing/types", &|p| files.contains(&p));
+        r.resolve("a/b/x.ts", "@/billing/types", &|p| files.contains(&p));
+        assert_eq!(*reads.borrow(), first);
     }
 
     #[test]
