@@ -60,11 +60,36 @@ pub(super) fn draw(f: &mut Frame, app: &App, area: Rect) {
             ColumnView::Collapsed => collapsed_lines(app, col, w),
             ColumnView::Expanded => {
                 let mut l = vec![Line::from(Span::styled(trunc(&col.name.to_uppercase(), w), Style::default().fg(DIM)))];
-                l.extend(col.cards.iter().map(|&i| card_line(app, i, w)));
+                let sel = col.cards.iter().position(|&i| i == app.cur);
+                let (start, end) = window(col.cards.len(), (cols[c].height as usize).saturating_sub(1), sel);
+                let hint = |t: String| Line::from(Span::styled(t, Style::default().fg(DIM)));
+                if start > 0 {
+                    l.push(hint(format!("↑ {start} more")));
+                }
+                l.extend(col.cards[start..end].iter().map(|&i| card_line(app, i, w)));
+                if end < col.cards.len() {
+                    l.push(hint(format!("↓ {} more", col.cards.len() - end)));
+                }
                 l
             }
         };
         f.render_widget(Paragraph::new(lines), cols[c]);
+    }
+}
+
+/// Cards `start..end` of a column that fit in `rows` along with any ↑/↓ hint rows, keeping `sel` in view.
+fn window(len: usize, rows: usize, sel: Option<usize>) -> (usize, usize) {
+    if len <= rows {
+        return (0, len);
+    }
+    let p = sel.unwrap_or(0);
+    if p + 1 < rows {
+        (0, rows.saturating_sub(1))
+    } else if p >= len - rows.saturating_sub(1) {
+        (len - rows.saturating_sub(1), len)
+    } else {
+        let shown = rows.saturating_sub(2).max(1);
+        (p + 1 - shown, p + 1)
     }
 }
 

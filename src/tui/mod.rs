@@ -98,8 +98,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
     let banner = app.banner();
     let banner_h = if banner.is_some() { 1 } else { 0 };
-    let map_h = app.map.columns.iter().map(|c| c.cards.len()).max().unwrap_or(0) as u16 + 3;
-    let (map_c, mid_c) = if app.diff_full { (0, 0) } else { (map_h, 16) };
+    const MID_H: u16 = 16;
+    // The map gets at most 40% of the rows it shares with the diff (min: header + 3 cards); columns scroll.
+    let shared = area.height.saturating_sub(2 + banner_h + MID_H);
+    let map_h = (app.map.columns.iter().map(|c| c.cards.len()).max().unwrap_or(0) as u16 + 3).min((shared * 2 / 5).max(6));
+    let (map_c, mid_c) = if app.diff_full { (0, 0) } else { (map_h, MID_H) };
     let rows = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(banner_h),

@@ -155,3 +155,25 @@ fn banners_for_stale_maps() {
     assert!(a.banner().unwrap().contains("/codemapx"));
     assert!(tui::snapshot(&mut a, 180, 52).lines().nth(1).unwrap().contains("/codemapx"));
 }
+
+#[test]
+fn tall_columns_scroll_and_leave_room_for_the_diff() {
+    let mut m = common::sample_map();
+    let proto = m.cards[m.card_index("src/billing/apply.ts").unwrap()].clone();
+    for k in 0..60 {
+        let mut c = proto.clone();
+        (c.id, c.name, c.column) = (format!("gen/f{k:02}.ts"), format!("f{k:02}.ts"), 0);
+        m.columns[0].cards.push(m.cards.len());
+        m.cards.push(c);
+    }
+    let mut a = App::new(m, PathBuf::from("/wt"));
+    at(&mut a, "gen/f45.ts");
+    let frame = tui::snapshot(&mut a, 180, 50);
+    assert!(frame.contains("▶ f45.ts") && frame.contains("↑ ") && frame.contains("↓ "), "{frame}");
+    let lines: Vec<&str> = frame.lines().collect();
+    let top = lines.iter().position(|l| l.starts_with("╭ diff ·")).unwrap();
+    let diff_rows = lines.len() - 2 - top - 1; // minus the help line and both borders
+    assert!(diff_rows >= 15, "diff pane has {diff_rows} rows\n{frame}");
+    // Columns without the selection show their top.
+    assert!(frame.contains("APPLY") && frame.contains("apply.ts"), "{frame}");
+}
