@@ -27,7 +27,7 @@ pub(crate) const BLUE: Color = Color::Rgb(132, 162, 255);
 pub(crate) const GREEN: Color = Color::Rgb(111, 207, 127);
 pub(crate) const RED: Color = Color::Rgb(255, 138, 138);
 pub(crate) const DIM: Color = Color::Rgb(110, 118, 132);
-pub(crate) const FAINT: Color = Color::Rgb(70, 76, 88);
+pub(crate) const FAINT: Color = Color::Rgb(98, 105, 120);
 pub(crate) const SEL_BG: Color = Color::Rgb(38, 44, 58);
 pub(crate) const HL_BG: Color = Color::Rgb(48, 58, 92);
 
