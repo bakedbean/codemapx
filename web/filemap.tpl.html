@@ -89,6 +89,7 @@ svg.edges path.ghost { stroke-dasharray: 3 3; }
 .links.outline button { color: var(--ink); }
 .links .ln { font: 11px/1 var(--f-mono); color: var(--muted); margin-left: 6px; }
 .links p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.links .ev { display: block; font: 11px/1.3 var(--f-mono); color: var(--muted); }
 .none { color: var(--muted); font-size: 13px; margin: 0; }
 .diff { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; min-width: 0; }
 .diff h3 { margin: 0; padding: 8px 12px; font: 500 12px/1.4 var(--f-mono); color: var(--muted); border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
@@ -129,84 +130,81 @@ svg.edges path.ghost { stroke-dasharray: 3 3; }
 </div>
 
 <script>
-const DIFFS = /*DIFFS*/;
-const CONFIG = /*CONFIG*/;
-const { COLS, NODES, EDGES, TRAIL, PREFIX: A } = CONFIG;
-
-const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
+const MAP = /*MAP*/;
+const { columns, cards, links, trail } = MAP;
 const $ = id => document.getElementById(id);
 const map = $('map'), svg = $('edges');
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const stats = n => (n.paths || []).reduce((t, p) => ({ a: t.a + (DIFFS[p]?.add || 0), r: t.r + (DIFFS[p]?.del || 0) }), { a: 0, r: 0 });
-const short = p => p.startsWith(A) ? p.slice(A.length) : p;
+const ghost = i => cards[i].kind !== 'changed';
 
-$('eyebrow').textContent = CONFIG.eyebrow;
-$('h1').textContent = CONFIG.title;
-map.style.setProperty('--cols', COLS.length);
+$('eyebrow').textContent = `${MAP.repo} · ${MAP.branch} · ${MAP.commits} commits · ${MAP.files} files · +${MAP.add} −${MAP.del}`;
+$('h1').textContent = MAP.title;
+map.style.setProperty('--cols', columns.length);
 
-COLS.forEach((title, c) => {
-  const col = document.createElement('div');
-  col.className = 'col';
-  col.innerHTML = `<div class="col-h">${esc(title)}</div>`;
-  NODES.filter(n => n.col === c).forEach(n => {
+columns.forEach(col => {
+  const el = document.createElement('div');
+  el.className = 'col';
+  el.innerHTML = `<div class="col-h">${esc(col.name)}</div>`;
+  col.cards.forEach(i => {
+    const n = cards[i];
     const b = document.createElement('button');
-    b.type = 'button'; b.id = 'card-' + n.id;
-    if (n.ghost) {
+    b.type = 'button'; b.id = 'card-' + i;
+    if (ghost(i)) {
       b.className = 'card ghost';
-      b.innerHTML = `<span class="top"><span class="n">${esc(n.name)}</span><span class="tag">${esc(n.ghost)}</span></span><span class="d">${esc(n.dir)}</span>`;
+      b.innerHTML = `<span class="top"><span class="n">${esc(n.name)}</span><span class="tag">${n.kind === 'context' ? 'unchanged' : 'not built'}</span></span><span class="d">${esc(n.dir)}</span>`;
     } else {
-      const s = stats(n), step = TRAIL.indexOf(n.id) + 1;
+      const step = trail.indexOf(i) + 1;
       b.className = 'card';
-      b.innerHTML = `<span class="top"><span class="n">${esc(n.name)}</span>${step ? `<span class="step">step ${step}</span>` : ''}</span><span class="d">${esc(n.dir)}</span><span class="s">${s.a ? `<span class="a">+${s.a}</span>` : ''}${s.r ? `<span class="r">−${s.r}</span>` : ''}</span>`;
+      b.innerHTML = `<span class="top"><span class="n">${esc(n.name)}</span>${step ? `<span class="step">step ${step}</span>` : ''}</span><span class="d">${esc(n.dir)}</span><span class="s">${n.add ? `<span class="a">+${n.add}</span>` : ''}${n.del ? `<span class="r">−${n.del}</span>` : ''}</span>`;
     }
-    b.addEventListener('click', () => select(n.id));
-    col.appendChild(b);
+    b.addEventListener('click', () => select(i));
+    el.appendChild(b);
   });
-  map.appendChild(col);
+  map.appendChild(el);
 });
 
 function drawEdges() {
   const box = map.getBoundingClientRect();
   svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
-  svg.innerHTML = EDGES.map(([f, t], i) => {
-    const a = $('card-' + f).getBoundingClientRect(), b = $('card-' + t).getBoundingClientRect();
+  svg.innerHTML = links.map((l, k) => {
+    const a = $('card-' + l.from).getBoundingClientRect(), b = $('card-' + l.to).getBoundingClientRect();
     const ay = a.top + a.height / 2 - box.top, by = b.top + b.height / 2 - box.top;
+    const cf = cards[l.from].column, ct = cards[l.to].column;
     let d;
-    if (byId[f].col === byId[t].col) {
+    if (cf === ct) {
       const x = a.right - box.left, bend = 22;
       d = `M${x} ${ay} C${x + bend} ${ay}, ${x + bend} ${by}, ${x} ${by}`;
-    } else if (byId[f].col > byId[t].col) {
+    } else if (cf > ct) {
       const x1 = a.left - box.left, x2 = b.right - box.left, mx = (x1 + x2) / 2;
       d = `M${x1} ${ay} C${mx} ${ay}, ${mx} ${by}, ${x2} ${by}`;
     } else {
       const x1 = a.right - box.left, x2 = b.left - box.left, mx = (x1 + x2) / 2;
       d = `M${x1} ${ay} C${mx} ${ay}, ${mx} ${by}, ${x2} ${by}`;
     }
-    const ghost = byId[f].ghost || byId[t].ghost ? ' class="ghost"' : '';
-    return `<path data-i="${i}" d="${d}"${ghost}/>`;
+    return `<path data-k="${k}" d="${d}"${ghost(l.from) || ghost(l.to) ? ' class="ghost"' : ''}/>`;
   }).join('');
   paint();
 }
 
-let cur = TRAIL[0];
+let cur = trail.length ? trail[0] : 0;
 function paint() {
   document.querySelectorAll('.card').forEach(c => c.classList.remove('sel', 'in', 'out'));
   $('card-' + cur).classList.add('sel');
   svg.querySelectorAll('path').forEach(p => {
-    const [f, t] = EDGES[+p.dataset.i];
-    p.classList.toggle('out', f === cur);
-    p.classList.toggle('in', t === cur);
-    if (f === cur) $('card-' + t).classList.add('out');
-    if (t === cur) $('card-' + f).classList.add('in');
+    const l = links[+p.dataset.k];
+    p.classList.toggle('out', l.from === cur);
+    p.classList.toggle('in', l.to === cur);
+    if (l.from === cur) $('card-' + l.to).classList.add('out');
+    if (l.to === cur) $('card-' + l.from).classList.add('in');
   });
 }
 
 function linkList(el, items) {
   el.innerHTML = items.length ? '' : '<li class="none">Nothing in this branch.</li>';
-  items.forEach(([id, why]) => {
+  items.forEach(([i, l]) => {
     const li = document.createElement('li');
-    li.innerHTML = `<button type="button">${esc(byId[id].name)}</button><p>${esc(why)}</p>`;
-    li.querySelector('button').addEventListener('click', () => select(id));
+    li.innerHTML = `<button type="button">${esc(cards[i].name)}</button><p>${esc(l.reason)}</p><span class="ev">${esc(l.evidence.path)}:${l.evidence.line}</span>`;
+    li.querySelector('button').addEventListener('click', () => select(i));
     el.appendChild(li);
   });
 }
@@ -217,7 +215,7 @@ function renderDiff(text, key) {
   return text.split('\n').map(l => {
     const h = l.match(/^@@ -\d+(?:,\d+)? \+(\d+)/);
     if (h) { n = +h[1]; return `<span class="l-h" data-n="">${esc(l)}</span>`; }
-    if (l.startsWith('-')) return `<span class="l-r" data-n="">${esc(l)}</span>`;
+    if (l.startsWith('-') || l.startsWith('\\')) return `<span class="l-r" data-n="">${esc(l)}</span>`;
     const cls = l.startsWith('+') ? 'l-a' : '';
     const out = `<span class="${cls}" data-n="${n}" id="${key}-L${n}">${esc(l) || ' '}</span>`;
     n++;
@@ -233,35 +231,42 @@ function jumpTo(key, line) {
   while (x && k < 3) { x.classList.add('flash'); const y = x; setTimeout(() => y.classList.remove('flash'), 1600); x = x.nextElementSibling; k++; }
 }
 
-function select(id) {
-  cur = id;
-  const n = byId[id], i = TRAIL.indexOf(id);
-  $('path').textContent = n.ghost ? n.ref : (n.paths.length > 1 ? `${n.dir} (${n.paths.length} files)` : short(n.paths[0]));
-  $('what').textContent = n.what;
-  $('pos').textContent = i >= 0 ? `step ${i + 1} of ${TRAIL.length}` : n.ghost;
-  $('prev').disabled = i <= 0;
-  $('next').disabled = i < 0 || i === TRAIL.length - 1;
-  linkList($('ins'), EDGES.filter(e => e[1] === id).map(e => [e[0], e[2]]));
-  linkList($('outs'), EDGES.filter(e => e[0] === id).map(e => [e[1], e[2]]));
+function note(title, text) {
+  return `<div class="diff"><h3>${esc(title)}</h3><div class="ghost-note">${esc(text)}</div></div>`;
+}
 
-  const key = 'f-' + id;
-  $('outline-box').hidden = !n.outline;
+function select(i) {
+  cur = i;
+  const n = cards[i], t = trail.indexOf(i);
+  $('path').textContent = n.path ?? 'not built';
+  $('what').textContent = n.what;
+  $('pos').textContent = t >= 0 ? `step ${t + 1} of ${trail.length}` : (n.kind === 'context' ? 'unchanged' : 'not built');
+  $('prev').disabled = t <= 0;
+  $('next').disabled = t < 0 || t === trail.length - 1;
+  linkList($('ins'), links.filter(l => l.to === i).map(l => [l.from, l]));
+  linkList($('outs'), links.filter(l => l.from === i).map(l => [l.to, l]));
+
+  const key = 'f-' + i;
+  $('outline-box').hidden = !n.outline.length;
   $('outline').innerHTML = '';
-  (n.outline || []).forEach(([name, line, why]) => {
+  n.outline.forEach(o => {
     const li = document.createElement('li');
-    li.innerHTML = `<button type="button">${esc(name)}</button><span class="ln">L${line}</span><p>${esc(why)}</p>`;
-    li.querySelector('button').addEventListener('click', () => jumpTo(key, line));
+    li.innerHTML = `<button type="button">${esc(o.name)}</button><span class="ln">L${o.start}</span><p>${esc(o.note)}</p>`;
+    li.querySelector('button').addEventListener('click', () => jumpTo(key, o.start));
     $('outline').appendChild(li);
   });
 
-  $('diffs').innerHTML = n.ghost
-    ? `<div class="diff"><h3>${esc(n.ref)}</h3><div class="ghost-note">Not changed in this branch. Shown because edits here depend on it.</div></div>`
-    : n.paths.map((p, j) => `<div class="diff"><h3>${esc(short(p))}</h3><pre>${renderDiff(DIFFS[p]?.diff || '', j ? key + j : key)}</pre></div>`).join('');
+  $('diffs').innerHTML =
+    n.kind === 'context' ? note(n.path, 'Not changed in this branch. Shown because edits here depend on it.')
+    : n.kind === 'missing' ? note(n.name, `Not built yet. ${n.what}`)
+    : n.binary ? note(n.path, 'Binary file; no diff.')
+    : !n.diff ? note(n.path, 'No content change (rename only).')
+    : `<div class="diff"><h3>${esc(n.path)}</h3><pre>${renderDiff(n.diff, key)}</pre></div>`;
   paint();
-  try { localStorage.setItem('fm-cur', id); } catch (e) {}
+  try { localStorage.setItem('fm-cur', String(i)); } catch (e) {}
 }
 
-const step = d => { const i = TRAIL.indexOf(cur); const j = i < 0 ? 0 : i + d; if (j >= 0 && j < TRAIL.length) select(TRAIL[j]); };
+const step = d => { const t = trail.indexOf(cur); const j = t < 0 ? 0 : t + d; if (j >= 0 && j < trail.length) select(trail[j]); };
 $('prev').addEventListener('click', () => step(-1));
 $('next').addEventListener('click', () => step(1));
 document.addEventListener('keydown', e => {
@@ -270,7 +275,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') { step(-1); e.preventDefault(); }
 });
 
-try { const s = localStorage.getItem('fm-cur'); if (s && byId[s]) cur = s; } catch (e) {}
+try { const s = +localStorage.getItem('fm-cur'); if (Number.isInteger(s) && s >= 0 && s < cards.length) cur = s; } catch (e) {}
 select(cur);
 drawEdges();
 new ResizeObserver(drawEdges).observe(map);
