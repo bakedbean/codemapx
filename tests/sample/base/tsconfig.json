@@ -1,0 +1,4 @@
+{
+  // Path aliases, as in most app repos.
+  "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["src/*"] } }
+}
