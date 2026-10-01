@@ -25,6 +25,12 @@ enum Cmd {
     },
     /// Check annotations.json against facts.json
     Validate { path: Option<PathBuf> },
+    /// Write the map as one self-contained HTML page
+    Html {
+        path: Option<PathBuf>,
+        #[arg(short, long)]
+        out: PathBuf,
+    },
     /// Open the map in the terminal (the default)
     View {
         path: Option<PathBuf>,
@@ -43,6 +49,7 @@ fn main() -> ExitCode {
     match cli.cmd.unwrap_or(Cmd::View { path: cli.path, snapshot: vec![], width: 180, height: 52 }) {
         Cmd::Collect { path, base } => cmd_collect(path, base.as_deref()),
         Cmd::Validate { path } => cmd_validate(path),
+        Cmd::Html { path, out } => cmd_html(path, &out),
         Cmd::View { path, snapshot, width, height } => cmd_view(path, &snapshot, width, height),
     }
 }
@@ -134,5 +141,25 @@ fn cmd_view(path: Option<PathBuf>, snapshot: &[String], width: u16, height: u16)
     match tui::run(&mut app) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => fail(1, e),
+    }
+}
+
+fn cmd_html(path: Option<PathBuf>, out: &std::path::Path) -> ExitCode {
+    let git = match open(path) {
+        Ok(g) => g,
+        Err(e) => return fail(2, e),
+    };
+    let map = match load::load(&git).map_err(|e| vec![e]).and_then(|l| load::merge(&git, &l)) {
+        Ok(m) => m,
+        Err(ps) => {
+            for p in &ps {
+                eprintln!("{p}");
+            }
+            return fail(1, "map is not valid; run codemapx validate");
+        }
+    };
+    match std::fs::write(out, codemapx::html::render(&map)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => fail(1, format!("{}: {e}", out.display())),
     }
 }
