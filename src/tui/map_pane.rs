@@ -4,16 +4,66 @@ use unicode_width::UnicodeWidthStr;
 use super::{AMBER, BLUE, DIM, FAINT, GREEN, RED, SEL_BG, app::{App, Pane, Rel}, pane_block, trunc, trunc_left};
 use crate::map::CardKind;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ColumnView {
+    Expanded,
+    Collapsed,
+}
+
+pub const FULL_WIDTH: u16 = 170;
+pub const MIN_WIDTH: u16 = 100;
+const COLLAPSED_W: u16 = 16;
+
+/// How each column renders at `width`; None when the map can't fit at all.
+pub fn column_layout(names: &[&str], width: u16, show_hidden: bool) -> Option<Vec<ColumnView>> {
+    if width < MIN_WIDTH {
+        return None;
+    }
+    let hideable: Vec<bool> = names.iter().map(|n| n.eq_ignore_ascii_case("tests") || n.eq_ignore_ascii_case("docs")).collect();
+    if width >= FULL_WIDTH || !hideable.contains(&true) {
+        return Some(vec![ColumnView::Expanded; names.len()]);
+    }
+    Some(hideable.iter().map(|&h| if h != show_hidden { ColumnView::Collapsed } else { ColumnView::Expanded }).collect())
+}
+
+fn collapsed_lines(app: &App, col: &crate::map::MapColumn, w: usize) -> Vec<Line<'static>> {
+    let mut lines = vec![Line::from(Span::styled(trunc(&format!("{} · {}", col.name.to_uppercase(), col.cards.len()), w), Style::default().fg(DIM)))];
+    if col.cards.contains(&app.cur) {
+        lines.push(Line::from(Span::styled("▶ selected", Style::default().fg(Color::White).bold())));
+    }
+    let count = |want: fn(&Rel) -> bool| col.cards.iter().filter(|&&i| want(&app.rel(i))).count();
+    let from = count(|r| matches!(r, Rel::From));
+    if from > 0 {
+        lines.push(Line::from(Span::styled(format!("◂ {from} came from"), Style::default().fg(AMBER))));
+    }
+    let to = count(|r| matches!(r, Rel::To));
+    if to > 0 {
+        lines.push(Line::from(Span::styled(format!("▸ {to} leads to"), Style::default().fg(BLUE))));
+    }
+    lines
+}
+
 pub(super) fn draw(f: &mut Frame, app: &App, area: Rect) {
     let block = pane_block(Line::from(" map "), app.focus == Pane::Map);
     let inner = block.inner(area);
     f.render_widget(block, area);
-    let n = app.map.columns.len() as u32;
-    let cols = Layout::horizontal((0..n).map(|_| Constraint::Ratio(1, n))).spacing(2).split(inner);
+    let names: Vec<&str> = app.map.columns.iter().map(|c| c.name.as_str()).collect();
+    let views = column_layout(&names, area.width, app.show_hidden).unwrap_or_else(|| vec![ColumnView::Expanded; names.len()]);
+    let constraints = views.iter().map(|v| match v {
+        ColumnView::Expanded => Constraint::Fill(1),
+        ColumnView::Collapsed => Constraint::Length(COLLAPSED_W),
+    });
+    let cols = Layout::horizontal(constraints).spacing(2).split(inner);
     for (c, col) in app.map.columns.iter().enumerate() {
         let w = cols[c].width as usize;
-        let mut lines = vec![Line::from(Span::styled(trunc(&col.name.to_uppercase(), w), Style::default().fg(DIM)))];
-        lines.extend(col.cards.iter().map(|&i| card_line(app, i, w)));
+        let lines = match views[c] {
+            ColumnView::Collapsed => collapsed_lines(app, col, w),
+            ColumnView::Expanded => {
+                let mut l = vec![Line::from(Span::styled(trunc(&col.name.to_uppercase(), w), Style::default().fg(DIM)))];
+                l.extend(col.cards.iter().map(|&i| card_line(app, i, w)));
+                l
+            }
+        };
         f.render_widget(Paragraph::new(lines), cols[c]);
     }
 }

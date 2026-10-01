@@ -4,7 +4,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::{AMBER, BLUE, DIM, SEL_BG, app::{App, Pane}, pane_block, trunc, wrap};
+use super::{AMBER, BLUE, DIM, FAINT, SEL_BG, app::{App, Pane}, pane_block, trunc, trunc_left, wrap};
 use crate::map::CardKind;
 
 fn link_items(app: &App, links: &[(usize, usize)], color: Color, width: usize) -> Vec<ListItem<'static>> {
@@ -23,6 +23,8 @@ fn link_items(app: &App, links: &[(usize, usize)], color: Color, width: usize) -
             }
             let mut lines = vec![Line::from(vec![name, Span::styled(if ghost { " ┆" } else { "" }, Style::default().fg(DIM))])];
             lines.extend(wrap(&link.reason, width.saturating_sub(2)).into_iter().map(|l| Line::from(Span::styled(format!("  {l}"), Style::default().fg(DIM)))));
+            let ev = format!("{}:{}", link.evidence.path, link.evidence.line);
+            lines.push(Line::from(Span::styled(format!("  {}", trunc_left(&ev, width.saturating_sub(2))), Style::default().fg(FAINT))));
             ListItem::new(lines)
         })
         .collect()

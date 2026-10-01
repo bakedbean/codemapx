@@ -34,6 +34,7 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('K') | KeyCode::PageUp => app.scroll_by(-15),
         KeyCode::Char('J') | KeyCode::PageDown => app.scroll_by(15),
         KeyCode::Enter => app.enter(),
+        KeyCode::Char('t') => app.show_hidden = !app.show_hidden,
         KeyCode::Char('d') => app.diff_full = !app.diff_full,
         KeyCode::Char('o') => match app.editor_target() {
             Some((path, line)) => return Action::Open(path, line),

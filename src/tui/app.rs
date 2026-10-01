@@ -207,8 +207,26 @@ impl App {
         }
     }
 
-    /// File and line `o` opens: the outline entry, else the top visible diff line.
+    /// Stale-map warning shown under the header, if any.
+    pub fn banner(&self) -> Option<String> {
+        match self.behind {
+            Some(n) if n > 0 => Some(format!("map is {n} commit{} behind HEAD — run codemapx collect", if n == 1 { "" } else { "s" })),
+            Some(_) => Some("map was made for a different commit — run codemapx collect".into()),
+            None if self.map.annotations_stale => Some("annotations were written for an older commit — run /codemapx to refresh them".into()),
+            None => None,
+        }
+    }
+
+    /// File and line `o` opens: the selected link's evidence in the came-from/leads-to panes,
+    /// the outline entry in the inside pane, else the top visible diff line.
     pub fn editor_target(&self) -> Option<(PathBuf, usize)> {
+        if matches!(self.focus, Pane::From | Pane::To) {
+            let incoming = self.focus == Pane::From;
+            let st = if incoming { &self.from } else { &self.to };
+            let &(_, k) = self.links(incoming).get(st.selected().unwrap_or(0))?;
+            let ev = &self.map.links[k].evidence;
+            return Some((self.root.join(&ev.path), ev.line));
+        }
         let c = self.card();
         let path = self.root.join(c.path.as_ref()?);
         match c.kind {

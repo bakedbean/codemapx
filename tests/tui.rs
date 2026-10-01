@@ -2,6 +2,7 @@ mod common;
 
 use std::path::PathBuf;
 
+use codemapx::tui::{ColumnView::*, column_layout};
 use codemapx::tui::{self, App, Pane, keys::{self, Action}};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -80,4 +81,77 @@ fn snapshot_apply_180() {
         assert!(frame.contains(needle), "missing {needle:?}\n{frame}");
     }
     common::assert_golden("tests/golden/apply-180.txt", &frame);
+}
+
+#[test]
+fn editor_command_uses_template_then_editor_then_nvim() {
+    assert_eq!(tui::editor_command("/a b.ts", 7, Some("code -g {path}:{line}"), Some("vim")), vec!["code", "-g", "/a b.ts:7"]);
+    assert_eq!(tui::editor_command("/a.ts", 7, None, Some("hx")), vec!["hx", "+7", "/a.ts"]);
+    assert_eq!(tui::editor_command("/a.ts", 7, None, Some("code -w")), vec!["code", "-w", "+7", "/a.ts"]);
+    assert_eq!(tui::editor_command("/a.ts", 7, Some("  "), None), vec!["nvim", "+7", "/a.ts"]);
+}
+
+#[test]
+fn editor_targets_link_evidence_in_link_panes() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    a.focus = Pane::From;
+    assert_eq!(a.editor_target(), Some((PathBuf::from("/wt/src/billing/apply.ts"), 5)));
+    a.from.select(Some(2));
+    assert_eq!(a.editor_target(), Some((PathBuf::from("/wt/src/jobs/fee-writer.ts"), 3)));
+}
+
+#[test]
+fn link_panes_show_evidence() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    let frame = tui::snapshot(&mut a, 180, 52);
+    assert!(frame.contains("src/jobs/fee-writer.ts:3"), "{frame}");
+}
+
+#[test]
+fn column_layout_collapses_tests_and_docs_below_170() {
+    let names = ["Shared", "Apply", "Tests", "docs"];
+    assert_eq!(column_layout(&names, 180, false), Some(vec![Expanded; 4]));
+    assert_eq!(column_layout(&names, 120, false), Some(vec![Expanded, Expanded, Collapsed, Collapsed]));
+    assert_eq!(column_layout(&names, 120, true), Some(vec![Collapsed, Collapsed, Expanded, Expanded]));
+    assert_eq!(column_layout(&["A", "B"], 120, false), Some(vec![Expanded; 2]));
+    assert_eq!(column_layout(&names, 99, false), None);
+}
+
+#[test]
+fn snapshot_apply_120_collapses() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    let frame = tui::snapshot(&mut a, 120, 52);
+    assert!(frame.contains("TESTS · 1") && frame.contains("DOCS · 1"), "{frame}");
+    common::assert_golden("tests/golden/apply-120.txt", &frame);
+    // mills.test.ts sits in the collapsed Tests column and is a leads-to of mills.ts.
+    at(&mut a, "src/billing/mills.ts");
+    assert!(tui::snapshot(&mut a, 120, 52).contains("▸ 1 leads to"));
+    assert!(tui::snapshot(&mut a, 120, 52).contains("TESTS · 1"));
+    key(&mut a, KeyCode::Char('t'));
+    let flipped = tui::snapshot(&mut a, 120, 52);
+    assert!(!flipped.contains("TESTS · 1") && !flipped.contains("DOCS · 1"), "{flipped}");
+    assert!(flipped.contains("APPLY · 2") && flipped.contains("TESTS  ") && flipped.contains("▸ mills.test.ts"), "{flipped}");
+}
+
+#[test]
+fn too_narrow_says_so() {
+    let mut a = app();
+    assert!(tui::snapshot(&mut a, 90, 30).contains("terminal too narrow (need 100)"));
+}
+
+#[test]
+fn banners_for_stale_maps() {
+    let mut a = app();
+    assert_eq!(a.banner(), None);
+    a.behind = Some(2);
+    assert_eq!(a.banner().as_deref(), Some("map is 2 commits behind HEAD — run codemapx collect"));
+    a.behind = Some(0);
+    assert_eq!(a.banner().as_deref(), Some("map was made for a different commit — run codemapx collect"));
+    a.behind = None;
+    a.map.annotations_stale = true;
+    assert!(a.banner().unwrap().contains("/codemapx"));
+    assert!(tui::snapshot(&mut a, 180, 52).lines().nth(1).unwrap().contains("/codemapx"));
 }
