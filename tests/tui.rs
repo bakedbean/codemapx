@@ -211,3 +211,33 @@ fn map_h_l_move_between_columns_keeping_row() {
     key(&mut a, KeyCode::Char('h'));
     assert_eq!(a.card().id, "src/billing/types.ts");
 }
+
+#[test]
+fn c_toggles_the_selected_cards_column_and_shift_c_resets() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    assert!(tui::snapshot(&mut a, 180, 52).contains("mills.ts"));
+    key(&mut a, KeyCode::Char('c'));
+    let frame = tui::snapshot(&mut a, 180, 52);
+    assert!(frame.contains("APPLY · 2"), "{frame}");
+    assert!(frame.contains("▶ selected"));
+    key(&mut a, KeyCode::Char('h'));
+    key(&mut a, KeyCode::Char('c'));
+    assert!(tui::snapshot(&mut a, 180, 52).contains("SHARED CONTRACT"));
+    key(&mut a, KeyCode::Char('c'));
+    assert!(!tui::snapshot(&mut a, 180, 52).contains("SHARED CONTRACTS · 2"));
+    key(&mut a, KeyCode::Char('C'));
+    assert!(!tui::snapshot(&mut a, 180, 52).contains("APPLY · 2"));
+}
+
+#[test]
+fn c_expands_an_auto_collapsed_column_and_t_clears_it() {
+    let mut a = app();
+    at(&mut a, "docs/apply.md");
+    assert!(tui::snapshot(&mut a, 120, 52).contains("DOCS · 1"));
+    key(&mut a, KeyCode::Char('c'));
+    assert!(!tui::snapshot(&mut a, 120, 52).contains("DOCS · 1"));
+    key(&mut a, KeyCode::Char('t'));
+    key(&mut a, KeyCode::Char('t'));
+    assert!(tui::snapshot(&mut a, 120, 52).contains("DOCS · 1"));
+}

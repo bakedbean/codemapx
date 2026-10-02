@@ -117,12 +117,13 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         f.render_widget(Paragraph::new(Span::styled(format!(" {b}"), Style::default().fg(AMBER).bold())), rows[1]);
     }
     if !app.diff_full {
+        app.map_width = rows[2].width;
         map_pane::draw(f, app, rows[2]);
         link_panes::draw(f, app, rows[3]);
     }
     diff_pane::draw(f, app, rows[4]);
     let help = app.flash.clone().unwrap_or_else(|| {
-        " ←/→ step   tab pane   ↑/↓ move   h/l column   ⏎ follow   o open   d full diff   J/K page   t tests/docs   q quit".into()
+        " ←/→ step  tab pane  ↑/↓ move  h/l column  c collapse  ⏎ follow  o open  d full diff  J/K page  t tests/docs  q quit".into()
     });
     f.render_widget(Paragraph::new(Span::styled(help, Style::default().fg(DIM))), rows[5]);
 }

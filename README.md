@@ -36,6 +36,8 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `d` | full-screen diff |
 | `J` `K` | page the diff |
 | `t` | in narrow terminals, swap the collapsed Tests/Docs columns in |
+| `c` | collapse or expand the column holding the selected card |
+| `C` | reset every column to the automatic layout |
 | `q` / `esc` | quit (`esc` first closes the full-screen diff) |
 
 `o` runs `$EDITOR +<line> <path>` (default `nvim`). For editors that take another form, set a template, e.g. `CODEMAPX_EDITOR='code -g {path}:{line}'`.
