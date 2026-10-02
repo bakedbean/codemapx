@@ -23,9 +23,9 @@
 │                                                    ││                                                                      ││                                                    │
 ╰────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────╯
 ╭ functions ───────────────────╮╭ diff · src/billing/apply.ts ─────────────────────────────────────────────────────────────────────────────────────────────────╮╭ minimap ─────────╮
-│ +   4 applyChanges           ││   1 +import type { Insertion } from '@/billing/types';                                                                       ││▀▀▀▀▀▀▀▀▀▀▀▀▀     │
-│                              ││   2 +import { millsToDecimal } from './mills';                                                                               ││▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄ │
-│                              ││   3 +                                                                                                                        ││▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀│
+│ +   4 applyChanges           ││   1 +import type { Insertion } from '@/billing/types';                                                                       ││⣛⣛⣛⣛⣛⣛⣛⣉⣁⣀⣀       │
+│                              ││   2 +import { millsToDecimal } from './mills';                                                                               ││⠋⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉   │
+│                              ││   3 +                                                                                                                        ││                  │
 │                              ││   4 +export function applyChanges(insertions: Insertion[]): string[] {                                                       ││                  │
 │                              ││   5 +  return insertions.map((ins) => `${ins.fee.id}=${millsToDecimal(ins.fee.amountMills)}`);                               ││                  │
 │                              ││   6 +}                                                                                                                       ││                  │

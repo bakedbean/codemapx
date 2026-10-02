@@ -665,6 +665,8 @@ fn the_minimap_colours_the_changed_rows() {
     let green = |y: u16| (m.x + 1..m.right() - 1).any(|x| [buf[(x, y)].fg, buf[(x, y)].bg].contains(&ratatui::style::Color::Rgb(111, 207, 127)));
     let rows: Vec<u16> = (m.y + 1..m.bottom() - 1).filter(|&y| green(y)).collect();
     assert_eq!(rows.len(), 1, "one changed row, got {rows:?}");
-    let frac = (rows[0] - m.y - 1) as f32 / (m.height - 2) as f32;
+    // Four lines a row leaves the map shorter than the panel, so measure against the drawn rows.
+    let drawn = (m.y + 1..m.bottom() - 1).filter(|&y| (m.x + 1..m.right() - 1).any(|x| buf[(x, y)].symbol() != " ")).count();
+    let frac = (rows[0] - m.y - 1) as f32 / drawn as f32;
     assert!((0.65..0.8).contains(&frac), "change about 3/4 down, at {frac}");
 }
