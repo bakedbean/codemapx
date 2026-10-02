@@ -33,7 +33,8 @@ pub fn parse(lang: Lang, src: &str) -> Option<Tree> {
     p.parse(src, None)
 }
 
-/// A top-level declaration; lines are 1-based and inclusive.
+/// A declaration in source order; lines are 1-based and inclusive. `nested` ones are functions declared
+/// inside a body or callback rather than at top level, and `depth` counts the listed functions around them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Decl {
     pub name: String,
@@ -41,6 +42,8 @@ pub struct Decl {
     pub start: usize,
     pub end: usize,
     pub exported: bool,
+    pub depth: usize,
+    pub nested: bool,
 }
 
 pub fn declarations(tree: &Tree, src: &str) -> Vec<Decl> {
@@ -49,8 +52,9 @@ pub fn declarations(tree: &Tree, src: &str) -> Vec<Decl> {
     let mut out = vec![];
     for node in root.children(&mut cur) {
         if node.kind() == "export_statement" {
-            if let Some(d) = node.child_by_field_name("declaration") {
-                push_decl(d, true, src, &mut out);
+            match node.child_by_field_name("declaration") {
+                Some(d) => push_decl(d, true, src, &mut out),
+                None => push_nested(node, 0, src, &mut out),
             }
         } else {
             push_decl(node, false, src, &mut out);
@@ -70,7 +74,7 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
         "type_alias_declaration" => "type",
         "enum_declaration" => "enum",
         "lexical_declaration" | "variable_declaration" => "variable",
-        _ => return,
+        _ => return push_nested(node, 0, src, out),
     };
     if !sound(node) {
         return;
@@ -80,12 +84,17 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
         let mut c = node.walk();
         for d in node.named_children(&mut c).filter(|d| d.kind() == "variable_declarator" && sound(*d)) {
             let (s, e) = lines(d);
-            out.push(Decl { name: name(d), kind: if holds_fn(d) { "function" } else { kind }, start: s, end: e, exported });
+            let f = holds_fn(d);
+            out.push(Decl { name: name(d), kind: if f { "function" } else { kind }, start: s, end: e, exported, depth: 0, nested: false });
+            push_nested(d, usize::from(f), src, out);
         }
         return;
     }
     let decl_name = name(node);
-    out.push(Decl { name: decl_name.clone(), kind, start, end, exported });
+    out.push(Decl { name: decl_name.clone(), kind, start, end, exported, depth: 0, nested: false });
+    if kind == "function" {
+        push_nested(node, 1, src, out);
+    }
     if kind == "class"
         && let Some(body) = node.child_by_field_name("body")
     {
@@ -95,8 +104,35 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
         for m in body.named_children(&mut c).filter(|m| is_method(m) && sound(*m)) {
             let (s, e) = lines(m);
             let n = m.child_by_field_name("name").or_else(|| m.child_by_field_name("property")).map(&text).unwrap_or_default();
-            out.push(Decl { name: format!("{decl_name}.{n}"), kind: "method", start: s, end: e, exported: false });
+            out.push(Decl { name: format!("{decl_name}.{n}"), kind: "method", start: s, end: e, exported: false, depth: 1, nested: false });
+            push_nested(m, 2, src, out);
         }
+    }
+}
+
+/// Functions declared anywhere under `node` (bodies, callbacks like `describe`), in source order; `depth` is
+/// the depth of the first one found. Iterative, so deep expression trees can't overflow the stack.
+fn push_nested(node: Node, depth: usize, src: &str, out: &mut Vec<Decl>) {
+    let text = |n: Node| n.utf8_text(src.as_bytes()).unwrap_or("").to_string();
+    let mut stack = vec![(node, depth)];
+    while let Some((n, d)) = stack.pop() {
+        let mut inner = d;
+        if n != node && sound(n) && let Some(name) = n.child_by_field_name("name").filter(|_| is_nested_fn(n)) {
+            let (start, end) = (n.start_position().row + 1, n.end_position().row + 1);
+            out.push(Decl { name: text(name), kind: "function", start, end, exported: false, depth: d, nested: true });
+            inner = d + 1;
+        }
+        let mut c = n.walk();
+        let kids: Vec<Node> = n.named_children(&mut c).collect();
+        stack.extend(kids.into_iter().rev().map(|k| (k, inner)));
+    }
+}
+
+fn is_nested_fn(n: Node) -> bool {
+    match n.kind() {
+        "function_declaration" | "generator_function_declaration" => true,
+        "variable_declarator" => holds_fn(n) && n.child_by_field_name("name").is_some_and(|m| m.kind() == "identifier"),
+        _ => false,
     }
 }
 
@@ -107,8 +143,13 @@ fn sound(n: Node) -> bool {
     n.child_by_field_name("name").is_none_or(|m| !m.is_missing() && !m.has_error()) && !n.children(&mut c).any(|k| k.is_error() || k.is_missing())
 }
 
+/// True when the value is a function, also behind parens, `as`, `satisfies` or `!`.
 fn holds_fn(n: Node) -> bool {
-    n.child_by_field_name("value").is_some_and(|v| matches!(v.kind(), "arrow_function" | "function_expression" | "function" | "generator_function"))
+    let mut v = n.child_by_field_name("value");
+    while let Some(w) = v.filter(|w| matches!(w.kind(), "parenthesized_expression" | "as_expression" | "satisfies_expression" | "non_null_expression")) {
+        v = w.named_child(0);
+    }
+    v.is_some_and(|v| matches!(v.kind(), "arrow_function" | "function_expression" | "function" | "generator_function"))
 }
 
 fn touches(d: &Decl, added: &[usize]) -> bool {
@@ -119,13 +160,13 @@ fn touches(d: &Decl, added: &[usize]) -> bool {
 pub fn outline(decls: &[Decl], added: &[usize]) -> Vec<OutlineItem> {
     decls
         .iter()
-        .filter(|d| matches!(d.kind, "function" | "class" | "method") || d.exported)
+        .filter(|d| !d.nested && (matches!(d.kind, "function" | "class" | "method") || d.exported))
         .filter(|d| touches(d, added))
         .map(|d| OutlineItem { name: d.name.clone(), kind: d.kind.into(), start: d.start, end: d.end })
         .collect()
 }
 
-/// Top-level functions, classes and their methods, for the functions panel; `deleted` is from `diff::deleted_at`.
+/// Functions at any depth, classes and their methods, for the functions panel; `deleted` is from `diff::deleted_at`.
 /// A deletion just above a declaration's first line falls outside it.
 pub fn functions(decls: &[Decl], added: &[usize], deleted: &[usize]) -> Vec<FunctionItem> {
     decls
@@ -133,7 +174,7 @@ pub fn functions(decls: &[Decl], added: &[usize], deleted: &[usize]) -> Vec<Func
         .filter(|d| matches!(d.kind, "function" | "class" | "method"))
         .map(|d| {
             let changed = touches(d, added) || deleted.iter().any(|&n| n > d.start && n <= d.end);
-            FunctionItem { name: d.name.clone(), kind: d.kind.into(), start: d.start, end: d.end, changed }
+            FunctionItem { name: d.name.clone(), kind: d.kind.into(), start: d.start, end: d.end, changed, depth: d.depth }
         })
         .collect()
 }
@@ -204,6 +245,34 @@ mod tests {
         let d = declarations(&parse(Lang::Ts, src).unwrap(), src);
         let got: Vec<String> = functions(&d, &[2], &[]).into_iter().map(|f| format!("{} {}-{} {}", f.name, f.start, f.end, f.changed)).collect();
         assert_eq!(got, vec!["a 1-1 false", "b 2-2 true"]);
+    }
+
+    #[test]
+    fn nested_functions_are_listed_at_their_depth_but_left_out_of_the_outline() {
+        let src = "function outer() {\n  const inner = () => {\n    function deepest() {}\n  };\n  const n = 1;\n  return [1].map((x) => x);\n}\n\ndescribe('x', () => {\n  const setup = async () => 1;\n});\n\nclass C {\n  go() {\n    const h = () => 1;\n  }\n}\n";
+        let d = declarations(&parse(Lang::Ts, src).unwrap(), src);
+        let got: Vec<String> = functions(&d, &[3], &[]).into_iter().map(|f| format!("{} {} {} {}-{} {}", f.depth, f.kind, f.name, f.start, f.end, f.changed)).collect();
+        assert_eq!(
+            got,
+            vec![
+                "0 function outer 1-7 true",
+                "1 function inner 2-4 true",
+                "2 function deepest 3-3 true",
+                "0 function setup 10-10 false",
+                "0 class C 13-17 false",
+                "1 method C.go 14-16 false",
+                "2 function h 15-15 false",
+            ]
+        );
+        let names: Vec<String> = outline(&d, &[3, 10, 15]).into_iter().map(|o| o.name).collect();
+        assert_eq!(names, vec!["outer", "C", "C.go"]);
+    }
+
+    #[test]
+    fn wrapped_function_values_are_functions() {
+        let src = "const a = (() => 1);\nconst b = (() => 1) as F;\nconst c = (() => 1) satisfies F;\nconst d = memo(() => 1);\n";
+        let got: Vec<String> = declarations(&parse(Lang::Ts, src).unwrap(), src).into_iter().map(|d| format!("{} {}", d.kind, d.name)).collect();
+        assert_eq!(got, vec!["function a", "function b", "function c", "variable d"]);
     }
 
     #[test]

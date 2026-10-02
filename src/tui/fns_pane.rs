@@ -36,8 +36,9 @@ pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         .map(|fun| {
             let (mark, style) = if fun.changed { (" +", Style::default().fg(GREEN).bold()) } else { ("  ", Style::default()) };
             let name = match (fun.kind.as_str(), fun.name.split_once('.')) {
-                ("method", Some((_, m))) => format!("  {m}"),
-                _ => fun.name.clone(),
+                // Older maps carry depth 0 for methods.
+                ("method", Some((_, m))) => format!("{}{m}", "  ".repeat(fun.depth.max(1))),
+                _ => format!("{}{}", "  ".repeat(fun.depth), fun.name),
             };
             let head = format!("{mark}{:>4} ", fun.start);
             ListItem::new(Line::from(vec![

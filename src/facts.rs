@@ -64,6 +64,13 @@ pub struct FunctionItem {
     pub start: usize,
     pub end: usize,
     pub changed: bool,
+    /// Functions around it; absent (0) from maps collected before nested functions were listed.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub depth: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// Declaration order is strength: dedup keeps the greatest kind per (from, to).
