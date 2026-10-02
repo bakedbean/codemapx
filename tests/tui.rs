@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use codemapx::tui::{ColumnView::*, column_layout};
 use codemapx::tui::{self, App, Pane, keys::{self, Action}};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 fn app() -> App {
     App::new(common::sample_map(), PathBuf::from("/wt"))
@@ -241,4 +241,72 @@ fn c_expands_an_auto_collapsed_column_and_t_clears_it() {
     key(&mut a, KeyCode::Char('t'));
     key(&mut a, KeyCode::Char('t'));
     assert!(tui::snapshot(&mut a, 120, 52).contains("DOCS · 1"));
+}
+
+fn mouse(app: &mut App, kind: MouseEventKind, row: u16) {
+    tui::mouse::handle(app, MouseEvent { kind, column: 40, row, modifiers: KeyModifiers::NONE });
+}
+
+fn drag(app: &mut App, from: u16, to: u16) {
+    mouse(app, MouseEventKind::Down(MouseButton::Left), from);
+    mouse(app, MouseEventKind::Drag(MouseButton::Left), to);
+    mouse(app, MouseEventKind::Up(MouseButton::Left), to);
+    tui::snapshot(app, 180, 50);
+}
+
+fn heights(app: &App) -> [u16; 3] {
+    app.panes.map(|r| r.height)
+}
+
+#[test]
+fn dragging_the_map_border_trades_rows_with_the_middle_row_only() {
+    let mut a = app();
+    tui::snapshot(&mut a, 180, 50);
+    let [map, mid, diff] = heights(&a);
+    let y = a.panes[1].y;
+    drag(&mut a, y, y + 3);
+    assert_eq!(heights(&a), [map + 3, mid - 3, diff]);
+    // The map's own bottom border is a handle too, and grabbing it does not jump.
+    let y = a.panes[0].bottom() - 1;
+    drag(&mut a, y, y - 2);
+    assert_eq!(heights(&a), [map + 1, mid - 1, diff]);
+}
+
+#[test]
+fn dragging_the_diff_border_trades_rows_with_the_middle_row_only() {
+    let mut a = app();
+    tui::snapshot(&mut a, 180, 50);
+    let [map, mid, diff] = heights(&a);
+    let y = a.panes[2].y;
+    drag(&mut a, y, y - 5);
+    assert_eq!(heights(&a), [map, mid - 5, diff + 5]);
+}
+
+#[test]
+fn drags_clamp_every_row_to_three_lines() {
+    let mut a = app();
+    tui::snapshot(&mut a, 180, 50);
+    let [map, mid, diff] = heights(&a);
+    let y = a.panes[1].y;
+    drag(&mut a, y, 0);
+    assert_eq!(heights(&a), [3, map + mid - 3, diff]);
+    let y = a.panes[2].y;
+    drag(&mut a, y, 49);
+    assert_eq!(heights(&a)[2], 3);
+    // A shorter terminal squeezes the dragged rows before the diff.
+    tui::snapshot(&mut a, 180, 20);
+    assert_eq!(heights(&a), [3, 12, 3]);
+}
+
+#[test]
+fn clicks_off_a_border_do_not_resize() {
+    let mut a = app();
+    tui::snapshot(&mut a, 180, 50);
+    let before = heights(&a);
+    let y = a.panes[1].y + 2;
+    drag(&mut a, y, y + 4);
+    mouse(&mut a, MouseEventKind::Drag(MouseButton::Left), y + 6);
+    tui::snapshot(&mut a, 180, 50);
+    assert_eq!(heights(&a), before);
+    assert!(a.heights.is_none());
 }
