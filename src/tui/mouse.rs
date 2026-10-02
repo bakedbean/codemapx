@@ -1,11 +1,17 @@
-//! Dragging the borders between the map, the middle row and the diff.
+//! Dragging the borders between the map, the middle row and the diff, and wheel-scrolling the diff.
 
-use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use ratatui::{
+    crossterm::event::{MouseButton, MouseEvent, MouseEventKind},
+    layout::Position,
+};
 
 use super::{
     MIN_ROW_H,
     app::{App, Divider},
 };
+
+/// Lines one wheel notch moves the diff.
+const WHEEL_LINES: isize = 3;
 
 pub fn handle(app: &mut App, ev: MouseEvent) {
     match ev.kind {
@@ -16,8 +22,14 @@ pub fn handle(app: &mut App, ev: MouseEvent) {
             }
         }
         MouseEventKind::Up(MouseButton::Left) => app.drag = None,
+        MouseEventKind::ScrollDown if over_diff(app, ev) => app.scroll_by(WHEEL_LINES),
+        MouseEventKind::ScrollUp if over_diff(app, ev) => app.scroll_by(-WHEEL_LINES),
         _ => {}
     }
+}
+
+fn over_diff(app: &App, ev: MouseEvent) -> bool {
+    app.panes[2].contains(Position::new(ev.column, ev.row))
 }
 
 /// The divider under `row` — either line of the two borders that meet there — and the row's offset from it.

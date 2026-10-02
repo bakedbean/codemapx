@@ -310,3 +310,18 @@ fn clicks_off_a_border_do_not_resize() {
     assert_eq!(heights(&a), before);
     assert!(a.heights.is_none());
 }
+
+#[test]
+fn the_wheel_scrolls_the_diff_only_when_over_it() {
+    let mut a = app();
+    tui::snapshot(&mut a, 180, 50);
+    let diff = a.panes[2].y + 2;
+    mouse(&mut a, MouseEventKind::ScrollDown, diff);
+    mouse(&mut a, MouseEventKind::ScrollDown, diff);
+    assert_eq!(a.scroll, 6);
+    mouse(&mut a, MouseEventKind::ScrollUp, diff);
+    assert_eq!(a.scroll, 3);
+    let map = a.panes[0].y + 2;
+    mouse(&mut a, MouseEventKind::ScrollDown, map);
+    assert_eq!(a.scroll, 3);
+}

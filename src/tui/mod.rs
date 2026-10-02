@@ -189,7 +189,7 @@ pub fn run(app: &mut App) -> io::Result<()> {
     res
 }
 
-/// Mouse capture is for border drags; terminals still select text with shift/option-drag.
+/// Mouse capture is for border drags and wheel-scrolling the diff; terminals still select text with shift/option-drag.
 fn init() -> io::Result<ratatui::DefaultTerminal> {
     let term = ratatui::init();
     execute!(io::stdout(), EnableMouseCapture)?;
