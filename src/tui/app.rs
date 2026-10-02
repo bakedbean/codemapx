@@ -17,9 +17,10 @@ pub enum Pane {
     From,
     Inside,
     To,
+    Functions,
     Diff,
 }
-pub const PANES: [Pane; 5] = [Pane::Map, Pane::From, Pane::Inside, Pane::To, Pane::Diff];
+pub const PANES: [Pane; 6] = [Pane::Map, Pane::From, Pane::Inside, Pane::To, Pane::Functions, Pane::Diff];
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Kind {
@@ -52,6 +53,7 @@ pub struct App {
     pub from: ListState,
     pub to: ListState,
     pub inside: ListState,
+    pub fns: ListState,
     pub lines: Vec<DLine>,
     pub scroll: usize,
     pub hl: Option<usize>,
@@ -68,6 +70,10 @@ pub struct App {
     pub panes: [Rect; 3],
     /// From, Inside and To as last drawn (empty when hidden), so the wheel can find the pane under it.
     pub mid_panes: [Rect; 3],
+    /// `f` shows or hides the functions panel; narrow terminals hide it regardless.
+    pub show_fns: bool,
+    /// The functions panel as last drawn (empty when hidden).
+    pub fns_pane: Rect,
     /// The border being dragged, and the grab row's offset from it.
     pub drag: Option<(Divider, i32)>,
 }
@@ -92,6 +98,7 @@ impl App {
             from: ListState::default(),
             to: ListState::default(),
             inside: ListState::default(),
+            fns: ListState::default(),
             lines: vec![],
             scroll: 0,
             hl: None,
@@ -103,6 +110,8 @@ impl App {
             heights: None,
             panes: [Rect::default(); 3],
             mid_panes: [Rect::default(); 3],
+            show_fns: true,
+            fns_pane: Rect::default(),
             drag: None,
         };
         app.select(first);
@@ -146,6 +155,7 @@ impl App {
         self.from.select(Some(0));
         self.to.select(Some(0));
         self.inside.select(if self.card().outline.is_empty() { None } else { Some(0) });
+        self.fns.select(if self.card().functions.is_empty() { None } else { Some(0) });
         self.scroll = 0;
         self.hl = None;
         self.lines = self.build_lines();
@@ -167,6 +177,17 @@ impl App {
         if let Some(i) = self.lines.iter().position(|l| l.n == Some(line)) {
             self.scroll = i.saturating_sub(2);
             self.hl = Some(i);
+        }
+    }
+
+    /// Highlights the first diff line inside `start..=end`, or nothing when the diff doesn't show that range.
+    fn jump_to_range(&mut self, start: usize, end: usize) {
+        match self.lines.iter().position(|l| l.n.is_some_and(|n| n >= start && n <= end)) {
+            Some(i) => {
+                self.scroll = i.saturating_sub(2);
+                self.hl = Some(i);
+            }
+            None => self.hl = None,
         }
     }
 
@@ -216,6 +237,16 @@ impl App {
                     self.jump_to_line(line);
                 }
             }
+            Pane::Functions => {
+                let len = self.card().functions.len();
+                if len > 0 {
+                    let s = (self.fns.selected().unwrap_or(0) as isize + d).clamp(0, len as isize - 1) as usize;
+                    self.fns.select(Some(s));
+                    let f = &self.card().functions[s];
+                    let (start, end) = (f.start, f.end);
+                    self.jump_to_range(start, end);
+                }
+            }
             Pane::Diff => self.scroll_by(d),
         }
     }
@@ -262,6 +293,14 @@ impl App {
         }
     }
 
+    /// `f`: hides or shows the functions panel; hiding it while focused focuses the diff.
+    pub fn toggle_fns(&mut self) {
+        self.show_fns = !self.show_fns;
+        if !self.show_fns && self.focus == Pane::Functions {
+            self.focus = Pane::Diff;
+        }
+    }
+
     pub fn scroll_by(&mut self, d: isize) {
         let max = self.lines.len().saturating_sub(1) as isize;
         self.scroll = (self.scroll as isize + d).clamp(0, max) as usize;
@@ -276,7 +315,7 @@ impl App {
                     self.select(i);
                 }
             }
-            Pane::Inside => self.focus = Pane::Diff,
+            Pane::Inside | Pane::Functions => self.focus = Pane::Diff,
             Pane::Map | Pane::Diff => {}
         }
     }
@@ -292,7 +331,7 @@ impl App {
     }
 
     /// File and line `o` opens: the selected link's evidence in the came-from/leads-to panes,
-    /// the outline entry in the inside pane, else the top visible diff line.
+    /// the outline entry in the inside pane, the function in the functions panel, else the top visible diff line.
     pub fn editor_target(&self) -> Option<(PathBuf, usize)> {
         if matches!(self.focus, Pane::From | Pane::To) {
             let incoming = self.focus == Pane::From;
@@ -310,6 +349,8 @@ impl App {
             CardKind::Changed => {
                 let line = if self.focus == Pane::Inside {
                     self.inside.selected().map(|s| c.outline[s].start)
+                } else if self.focus == Pane::Functions {
+                    self.fns.selected().map(|s| c.functions[s].start)
                 } else {
                     self.lines[self.scroll.min(self.lines.len())..].iter().find_map(|l| l.n)
                 };

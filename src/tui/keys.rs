@@ -21,14 +21,8 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Esc => return Action::Quit,
         KeyCode::Left => app.step(-1),
         KeyCode::Right => app.step(1),
-        KeyCode::Tab => {
-            let p = PANES.iter().position(|p| *p == app.focus).unwrap_or(0);
-            app.focus = PANES[(p + 1) % PANES.len()];
-        }
-        KeyCode::BackTab => {
-            let p = PANES.iter().position(|p| *p == app.focus).unwrap_or(0);
-            app.focus = PANES[(p + PANES.len() - 1) % PANES.len()];
-        }
+        KeyCode::Tab => cycle(app, 1),
+        KeyCode::BackTab => cycle(app, PANES.len() - 1),
         KeyCode::Char('h') if app.focus == Pane::Map => app.move_column(-1),
         KeyCode::Char('l') if app.focus == Pane::Map => app.move_column(1),
         KeyCode::Up | KeyCode::Char('k') => app.move_in(-1),
@@ -40,6 +34,7 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('c') => app.toggle_column(),
         KeyCode::Char('C') => app.col_overrides.fill(None),
         KeyCode::Char('d') => app.diff_full = !app.diff_full,
+        KeyCode::Char('f') => app.toggle_fns(),
         KeyCode::Char('o') => match app.editor_target() {
             Some((path, line)) => return Action::Open(path, line),
             None => app.flash = Some(" Nothing to open here.".into()),
@@ -47,4 +42,16 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         _ => {}
     }
     Action::None
+}
+
+/// Moves focus `by` panes forward, skipping the functions panel when it isn't on screen.
+fn cycle(app: &mut App, by: usize) {
+    let mut p = PANES.iter().position(|p| *p == app.focus).unwrap_or(0);
+    loop {
+        p = (p + by) % PANES.len();
+        if PANES[p] != Pane::Functions || app.fns_pane.width > 0 {
+            break;
+        }
+    }
+    app.focus = PANES[p];
 }

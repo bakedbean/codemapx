@@ -172,7 +172,7 @@ fn tall_columns_scroll_and_leave_room_for_the_diff() {
     let frame = tui::snapshot(&mut a, 180, 50);
     assert!(frame.contains("▶ f45.ts") && frame.contains("↑ ") && frame.contains("↓ "), "{frame}");
     let lines: Vec<&str> = frame.lines().collect();
-    let top = lines.iter().position(|l| l.starts_with("╭ diff ·")).unwrap();
+    let top = lines.iter().position(|l| l.contains("╭ diff ·")).unwrap();
     let diff_rows = lines.len() - 2 - top - 1; // minus the help line and both borders
     assert!(diff_rows >= 15, "diff pane has {diff_rows} rows\n{frame}");
     // Columns without the selection show their top.
@@ -372,4 +372,103 @@ fn the_wheel_does_nothing_over_hidden_panes_in_full_diff() {
     mouse(&mut a, MouseEventKind::ScrollDown, diff);
     assert_eq!(a.scroll, 3);
     assert_eq!(a.card().id, "src/billing/apply.ts");
+}
+
+#[test]
+fn functions_panel_lists_every_function_and_marks_changed_ones() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    let frame = tui::snapshot(&mut a, 180, 52);
+    assert!(frame.contains("╭ functions "), "{frame}");
+    assert!(frame.contains("│     1 toMills"), "{frame}");
+    assert!(frame.contains("│ +   5 millsToDecimal"), "{frame}");
+    assert!(a.fns_pane.width > 0 && a.fns_pane.x == 0);
+}
+
+#[test]
+fn f_toggles_the_functions_panel_and_narrow_terminals_hide_it() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    key(&mut a, KeyCode::Char('f'));
+    assert!(!tui::snapshot(&mut a, 180, 52).contains("╭ functions "));
+    assert_eq!(a.fns_pane, ratatui::layout::Rect::default());
+    key(&mut a, KeyCode::Char('f'));
+    assert!(tui::snapshot(&mut a, 180, 52).contains("╭ functions "));
+    assert!(!tui::snapshot(&mut a, 120, 52).contains("╭ functions "));
+    key(&mut a, KeyCode::Char('d'));
+    assert!(tui::snapshot(&mut a, 180, 52).contains("╭ functions "), "shown in full diff too");
+}
+
+#[test]
+fn tab_reaches_the_functions_panel_only_while_shown() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    tui::snapshot(&mut a, 180, 52);
+    a.focus = Pane::To;
+    key(&mut a, KeyCode::Tab);
+    assert_eq!(a.focus, Pane::Functions);
+    key(&mut a, KeyCode::Tab);
+    assert_eq!(a.focus, Pane::Diff);
+    key(&mut a, KeyCode::BackTab);
+    key(&mut a, KeyCode::Char('f'));
+    assert_eq!(a.focus, Pane::Diff, "hiding the focused panel focuses the diff");
+    tui::snapshot(&mut a, 180, 52);
+    a.focus = Pane::To;
+    key(&mut a, KeyCode::Tab);
+    assert_eq!(a.focus, Pane::Diff);
+}
+
+#[test]
+fn moving_in_the_functions_panel_jumps_the_diff_and_sets_the_editor_target() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    tui::snapshot(&mut a, 180, 52);
+    a.focus = Pane::Functions;
+    assert_eq!(a.editor_target(), Some((PathBuf::from("/wt/src/billing/mills.ts"), 1)));
+    key(&mut a, KeyCode::Down);
+    assert_eq!(a.fns.selected(), Some(1));
+    assert_eq!(a.hl.map(|h| a.lines[h].n), Some(Some(5)));
+    assert_eq!(a.editor_target(), Some((PathBuf::from("/wt/src/billing/mills.ts"), 5)));
+    key(&mut a, KeyCode::Enter);
+    assert_eq!(a.focus, Pane::Diff);
+}
+
+#[test]
+fn a_function_outside_the_diff_clears_the_highlight() {
+    let mut a = app();
+    let i = a.map.card_index("src/billing/mills.ts").unwrap();
+    let mut far = a.map.cards[i].functions[0].clone();
+    (far.name, far.start, far.end) = ("far".into(), 40, 44);
+    a.map.cards[i].functions.push(far);
+    a.select(i);
+    a.move_pane(Pane::Functions, 1);
+    assert!(a.hl.is_some());
+    a.move_pane(Pane::Functions, 1);
+    assert_eq!(a.fns.selected(), Some(2));
+    assert!(a.hl.is_none());
+}
+
+#[test]
+fn the_wheel_moves_the_functions_panel() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    tui::snapshot(&mut a, 180, 52);
+    let p = a.fns_pane;
+    mouse_at(&mut a, MouseEventKind::ScrollDown, p.x + 2, p.y + 2);
+    assert_eq!(a.fns.selected(), Some(1));
+    assert!(a.hl.is_some(), "moving a function jumps the diff");
+    assert_eq!(a.focus, Pane::Map);
+}
+
+#[test]
+fn functions_panel_explains_empty_lists() {
+    let mut a = app();
+    at(&mut a, "docs/apply.md");
+    assert!(tui::snapshot(&mut a, 180, 52).contains("TS/JS only"));
+    at(&mut a, "src/billing/types.ts");
+    assert!(tui::snapshot(&mut a, 180, 52).contains("No functions."));
+    let i = a.map.card_index("src/billing/mills.ts").unwrap();
+    a.map.cards[i].functions.clear();
+    a.select(i);
+    assert!(tui::snapshot(&mut a, 180, 52).contains("re-run /codemapx"));
 }

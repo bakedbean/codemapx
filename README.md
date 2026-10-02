@@ -31,9 +31,10 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `tab` | move between panes |
 | `↑` `↓` | move within the focused pane (in the map, within the current column) |
 | `h` `l` | map pane: move to the next column left or right (reaches context cards, which are off the trail) |
-| `⏎` | in a came-from / leads-to pane, jump to that card; in the inside pane, focus the diff |
-| `o` | open the editor at the diff line, outline entry, or link evidence |
+| `⏎` | in a came-from / leads-to pane, jump to that card; in the inside or functions pane, focus the diff |
+| `o` | open the editor at the diff line, outline entry, function, or link evidence |
 | `d` | full-screen diff |
+| `f` | show or hide the functions panel left of the diff: every function, class and method in a TS/JS file, `+` on the ones this branch changed; moving in it jumps the diff to that function |
 | `J` `K` | page the diff |
 | `t` | expand the Tests/Docs columns, which start collapsed (in narrow terminals this collapses the others) |
 | `c` | collapse or expand the column holding the selected card |
@@ -46,7 +47,7 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 
 The TUI captures the mouse for border drags and wheel scrolling; most terminals still select text with shift-drag (option-drag in iTerm2 and Terminal.app).
 
-The map wants about 170 columns. Below that, Tests and Docs collapse to counts; below 100 it asks for a wider terminal.
+The map wants about 170 columns. Below that, Tests and Docs collapse to counts; below 130 the functions panel hides; below 100 it asks for a wider terminal.
 
 ## Development
 

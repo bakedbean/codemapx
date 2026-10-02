@@ -33,7 +33,8 @@ fn wheel(app: &mut App, ev: MouseEvent, d: isize) {
     let [map, _, diff] = app.panes;
     let [from, inside, to] = app.mid_panes;
     let at = Position::new(ev.column, ev.row);
-    let hit = [(Pane::Map, map), (Pane::From, from), (Pane::Inside, inside), (Pane::To, to), (Pane::Diff, diff)]
+    // The functions panel sits inside the diff row, so it is tested first.
+    let hit = [(Pane::Map, map), (Pane::From, from), (Pane::Inside, inside), (Pane::To, to), (Pane::Functions, app.fns_pane), (Pane::Diff, diff)]
         .into_iter()
         .find(|(_, r)| r.contains(at));
     match hit {
