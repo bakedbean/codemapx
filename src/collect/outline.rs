@@ -72,10 +72,13 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
         "lexical_declaration" | "variable_declaration" => "variable",
         _ => return,
     };
+    if !sound(node) {
+        return;
+    }
     let (start, end) = lines(node);
     if kind == "variable" {
         let mut c = node.walk();
-        for d in node.named_children(&mut c).filter(|d| d.kind() == "variable_declarator") {
+        for d in node.named_children(&mut c).filter(|d| d.kind() == "variable_declarator" && sound(*d)) {
             let (s, e) = lines(d);
             out.push(Decl { name: name(d), kind: if holds_fn(d) { "function" } else { kind }, start: s, end: e, exported });
         }
@@ -89,12 +92,19 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
         let mut c = body.walk();
         // TS calls class fields public_field_definition (name), JS field_definition (property).
         let is_method = |m: &Node| m.kind() == "method_definition" || (matches!(m.kind(), "public_field_definition" | "field_definition") && holds_fn(*m));
-        for m in body.named_children(&mut c).filter(is_method) {
+        for m in body.named_children(&mut c).filter(|m| is_method(m) && sound(*m)) {
             let (s, e) = lines(m);
             let n = m.child_by_field_name("name").or_else(|| m.child_by_field_name("property")).map(&text).unwrap_or_default();
             out.push(Decl { name: format!("{decl_name}.{n}"), kind: "method", start: s, end: e, exported: false });
         }
     }
+}
+
+/// False when parse recovery broke the declaration itself (an ERROR or MISSING direct child, or a broken name),
+/// so its name or range can't be trusted; errors nested deeper, e.g. in the body, leave it sound.
+fn sound(n: Node) -> bool {
+    let mut c = n.walk();
+    n.child_by_field_name("name").is_none_or(|m| !m.is_missing() && !m.has_error()) && !n.children(&mut c).any(|k| k.is_error() || k.is_missing())
 }
 
 fn holds_fn(n: Node) -> bool {
@@ -210,6 +220,24 @@ mod tests {
         let changed = |deleted: &[usize]| functions(&decls(), &[], deleted).into_iter().filter(|f| f.changed).map(|f| f.name).collect::<Vec<_>>();
         assert_eq!(changed(&[8]), vec!["apply"]);
         assert!(changed(&[6]).is_empty());
+    }
+
+    #[test]
+    fn declarations_survive_errors_inside_function_bodies() {
+        // tree-sitter-typescript 0.23 can't parse a generic tagged template (Prisma's `$queryRaw<T>`...``).
+        let src = "async function f() {\n  const r = await db.q<{ id: string }[]>`x`;\n  return r;\n}\n\nexport function g() {\n  return 1;\n}\n";
+        let tree = parse(Lang::Ts, src).unwrap();
+        assert!(tree.root_node().has_error());
+        let got: Vec<String> = declarations(&tree, src).into_iter().map(|d| format!("{} {} {}-{} {}", d.kind, d.name, d.start, d.end, d.exported)).collect();
+        assert_eq!(got, vec!["function f 1-4 false", "function g 6-8 true"]);
+    }
+
+    #[test]
+    fn declarations_broken_by_recovery_are_dropped() {
+        // Recovery names the class `extends` and the function `x`; the stray `const = 3` becomes a top-level ERROR.
+        let src = "export class extends B {}\nfunction 1x() {}\nconst = 3;\nfunction f(a {\n  return 1;\n}\n";
+        let got: Vec<String> = declarations(&parse(Lang::Ts, src).unwrap(), src).into_iter().map(|d| format!("{} {}-{}", d.name, d.start, d.end)).collect();
+        assert_eq!(got, vec!["f 4-6"]);
     }
 
     #[test]
