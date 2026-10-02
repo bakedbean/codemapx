@@ -35,6 +35,7 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('C') => app.col_overrides.fill(None),
         KeyCode::Char('d') => app.diff_full = !app.diff_full,
         KeyCode::Char('f') => app.toggle_fns(),
+        KeyCode::Char('m') => app.show_minimap = !app.show_minimap,
         KeyCode::Char('o') => match app.editor_target() {
             Some((path, line)) => return Action::Open(path, line),
             None => app.flash = Some(" Nothing to open here.".into()),

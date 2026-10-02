@@ -76,16 +76,23 @@ pub struct App {
     pub fns_pane: Rect,
     /// Functions panel width set by dragging its border; None uses the default.
     pub fns_width: Option<u16>,
+    /// `m` shows or hides the minimap beside the diff.
+    pub show_minimap: bool,
+    /// The minimap as last drawn (empty when hidden).
+    pub minimap: Rect,
+    /// Minimap width set by dragging its border; None uses the default.
+    pub minimap_width: Option<u16>,
     /// The border being dragged, and the grab row's offset from it.
     pub drag: Option<(Divider, i32)>,
 }
 
-/// A draggable border: above the middle row, above the diff, or between the functions panel and the diff.
+/// A draggable border: above the middle row, above the diff, or between the diff and the panel on either side of it.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Divider {
     MapMid,
     MidDiff,
     FnsDiff,
+    DiffMinimap,
 }
 
 impl App {
@@ -116,6 +123,9 @@ impl App {
             mid_panes: [Rect::default(); 3],
             show_fns: true,
             fns_pane: Rect::default(),
+            show_minimap: true,
+            minimap: Rect::default(),
+            minimap_width: None,
             drag: None,
         };
         app.select(first);

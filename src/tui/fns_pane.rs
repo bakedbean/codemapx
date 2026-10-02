@@ -12,7 +12,7 @@ pub(super) const WIDTH: u16 = 32;
 /// Narrowest a drag can make the panel.
 const MIN_WIDTH: u16 = 16;
 /// Columns a drag must leave the diff.
-const MIN_DIFF_WIDTH: u16 = 40;
+pub(super) const MIN_DIFF_WIDTH: u16 = 40;
 /// Narrowest terminal that still shows the panel beside the diff.
 pub(super) const MIN_TERM_WIDTH: u16 = 130;
 

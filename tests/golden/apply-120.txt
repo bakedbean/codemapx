@@ -22,31 +22,31 @@
 │                                  ││                                              ││                                  │
 │                                  ││                                              ││                                  │
 ╰──────────────────────────────────╯╰──────────────────────────────────────────────╯╰──────────────────────────────────╯
-╭ diff · src/billing/apply.ts ─────────────────────────────────────────────────────────────────────────────────────────╮
-│   1 +import type { Insertion } from '@/billing/types';                                                               │
-│   2 +import { millsToDecimal } from './mills';                                                                       │
-│   3 +                                                                                                                │
-│   4 +export function applyChanges(insertions: Insertion[]): string[] {                                               │
-│   5 +  return insertions.map((ins) => `${ins.fee.id}=${millsToDecimal(ins.fee.amountMills)}`);                       │
-│   6 +}                                                                                                               │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                                                                                                      │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
- ←/→ step  tab pane  ↑/↓ move  h/l col  c collapse  ⏎ follow  o open  d full diff  f fns  J/K page  t tests/docs  q quit
+╭ diff · src/billing/apply.ts ─────────────────────────────────────────────────────────────────────╮╭ minimap ─────────╮
+│   1 +import type { Insertion } from '@/billing/types';                                           ││▀▀▀▀▀▀▀▀▀▀▀▀▀     │
+│   2 +import { millsToDecimal } from './mills';                                                   ││▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄ │
+│   3 +                                                                                            ││▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀│
+│   4 +export function applyChanges(insertions: Insertion[]): string[] {                           ││                  │
+│   5 +  return insertions.map((ins) => `${ins.fee.id}=${millsToDecimal(ins.fee.amountMills)}`);   ││                  │
+│   6 +}                                                                                           ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+│                                                                                                  ││                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯╰──────────────────╯
+ ←/→ step  tab pane  ↑/↓ move  h/l col  c fold  ⏎ follow  o open  d full  f fns  m minimap  J/K page  t tests  q quit
