@@ -32,6 +32,9 @@ fn collects_sample_facts() {
     assert_eq!(outline("src/billing/mills.ts"), vec![("millsToDecimal".to_string(), 5, 8)]);
     assert_eq!(outline("src/billing/apply.ts"), vec![("applyChanges".to_string(), 4, 6)]);
     assert_eq!(outline("src/api/route.ts"), vec![("handle".to_string(), 4, 6)]);
+    let mills = &f.files.iter().find(|x| x.path == "src/billing/mills.ts").unwrap().functions;
+    let got: Vec<(&str, usize, bool)> = mills.iter().map(|x| (x.name.as_str(), x.start, x.changed)).collect();
+    assert_eq!(got, vec![("toMills", 1, false), ("millsToDecimal", 5, true)]);
     assert!(f.warnings.is_empty(), "{:?}", f.warnings);
     common::assert_golden("tests/sample/expected-facts.json", &facts::to_json(&f));
 }

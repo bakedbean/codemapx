@@ -2,6 +2,7 @@
 
 pub mod app;
 mod diff_pane;
+mod fns_pane;
 pub mod keys;
 mod link_panes;
 pub mod map_pane;
@@ -96,7 +97,11 @@ pub(crate) fn pane_block(title: Line<'static>, focused: bool) -> Block<'static> 
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
+    app.fns_pane = Rect::default();
     if area.width < map_pane::MIN_WIDTH {
+        if app.focus == Pane::Functions {
+            app.focus = Pane::Diff;
+        }
         f.render_widget(Paragraph::new(Span::styled("terminal too narrow (need 100)", Style::default().fg(DIM))), area);
         return;
     }
@@ -124,9 +129,18 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         map_pane::draw(f, app, rows[2]);
         link_panes::draw(f, app, rows[3]);
     }
-    diff_pane::draw(f, app, rows[4]);
+    let mut diff = rows[4];
+    if app.show_fns && area.width >= fns_pane::MIN_TERM_WIDTH {
+        let cols = Layout::horizontal([Constraint::Length(fns_pane::WIDTH), Constraint::Min(0)]).split(rows[4]);
+        app.fns_pane = cols[0];
+        diff = cols[1];
+        fns_pane::draw(f, app, cols[0]);
+    } else if app.focus == Pane::Functions {
+        app.focus = Pane::Diff;
+    }
+    diff_pane::draw(f, app, diff);
     let help = app.flash.clone().unwrap_or_else(|| {
-        " ←/→ step  tab pane  ↑/↓ move  h/l column  c collapse  ⏎ follow  o open  d full diff  J/K page  t tests/docs  q quit".into()
+        " ←/→ step  tab pane  ↑/↓ move  h/l col  c collapse  ⏎ follow  o open  d full diff  f fns  J/K page  t tests/docs  q quit".into()
     });
     f.render_widget(Paragraph::new(Span::styled(help, Style::default().fg(DIM))), rows[5]);
 }

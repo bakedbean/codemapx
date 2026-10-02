@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use tree_sitter::{Language, Node, Parser, Tree};
 
-use crate::facts::OutlineItem;
+use crate::facts::{FunctionItem, OutlineItem};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Lang {
@@ -76,7 +76,8 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
     if kind == "variable" {
         let mut c = node.walk();
         for d in node.named_children(&mut c).filter(|d| d.kind() == "variable_declarator") {
-            out.push(Decl { name: name(d), kind, start, end, exported });
+            let (s, e) = lines(d);
+            out.push(Decl { name: name(d), kind: if holds_fn(d) { "function" } else { kind }, start: s, end: e, exported });
         }
         return;
     }
@@ -86,11 +87,18 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
         && let Some(body) = node.child_by_field_name("body")
     {
         let mut c = body.walk();
-        for m in body.named_children(&mut c).filter(|m| m.kind() == "method_definition") {
+        // TS calls class fields public_field_definition (name), JS field_definition (property).
+        let is_method = |m: &Node| m.kind() == "method_definition" || (matches!(m.kind(), "public_field_definition" | "field_definition") && holds_fn(*m));
+        for m in body.named_children(&mut c).filter(is_method) {
             let (s, e) = lines(m);
-            out.push(Decl { name: format!("{decl_name}.{}", name(m)), kind: "method", start: s, end: e, exported: false });
+            let n = m.child_by_field_name("name").or_else(|| m.child_by_field_name("property")).map(&text).unwrap_or_default();
+            out.push(Decl { name: format!("{decl_name}.{n}"), kind: "method", start: s, end: e, exported: false });
         }
     }
+}
+
+fn holds_fn(n: Node) -> bool {
+    n.child_by_field_name("value").is_some_and(|v| matches!(v.kind(), "arrow_function" | "function_expression" | "function" | "generator_function"))
 }
 
 fn touches(d: &Decl, added: &[usize]) -> bool {
@@ -104,6 +112,19 @@ pub fn outline(decls: &[Decl], added: &[usize]) -> Vec<OutlineItem> {
         .filter(|d| matches!(d.kind, "function" | "class" | "method") || d.exported)
         .filter(|d| touches(d, added))
         .map(|d| OutlineItem { name: d.name.clone(), kind: d.kind.into(), start: d.start, end: d.end })
+        .collect()
+}
+
+/// Top-level functions, classes and their methods, for the functions panel; `deleted` is from `diff::deleted_at`.
+/// A deletion just above a declaration's first line falls outside it.
+pub fn functions(decls: &[Decl], added: &[usize], deleted: &[usize]) -> Vec<FunctionItem> {
+    decls
+        .iter()
+        .filter(|d| matches!(d.kind, "function" | "class" | "method"))
+        .map(|d| {
+            let changed = touches(d, added) || deleted.iter().any(|&n| n > d.start && n <= d.end);
+            FunctionItem { name: d.name.clone(), kind: d.kind.into(), start: d.start, end: d.end, changed }
+        })
         .collect()
 }
 
@@ -151,6 +172,44 @@ mod tests {
     fn changed_exports_are_exported_declarations_touching_added_lines() {
         let got: Vec<String> = changed_exports(&decls(), &[4, 7, 12, 20, 21]).into_iter().collect();
         assert_eq!(got, vec!["Id", "apply"]);
+    }
+
+    #[test]
+    fn functions_lists_every_function_class_and_method_marking_changed_ones() {
+        let got: Vec<String> = functions(&decls(), &[7], &[]).into_iter().map(|f| format!("{} {} {}", f.kind, f.name, f.changed)).collect();
+        assert_eq!(got, vec!["function apply true", "class Writer false", "method Writer.write false"]);
+    }
+
+    #[test]
+    fn consts_holding_functions_are_functions() {
+        let src = "export const a = () => 1;\nconst b = function () {\n  return 2;\n};\nconst c = 3;\n";
+        let d = declarations(&parse(Lang::Ts, src).unwrap(), src);
+        let got: Vec<(&str, &str, usize, usize)> = d.iter().map(|d| (d.name.as_str(), d.kind, d.start, d.end)).collect();
+        assert_eq!(got, vec![("a", "function", 1, 1), ("b", "function", 2, 4), ("c", "variable", 5, 5)]);
+    }
+
+    #[test]
+    fn each_declarator_gets_its_own_lines() {
+        let src = "const a = () => 1,\n  b = () => 2;\n";
+        let d = declarations(&parse(Lang::Ts, src).unwrap(), src);
+        let got: Vec<String> = functions(&d, &[2], &[]).into_iter().map(|f| format!("{} {}-{} {}", f.name, f.start, f.end, f.changed)).collect();
+        assert_eq!(got, vec!["a 1-1 false", "b 2-2 true"]);
+    }
+
+    #[test]
+    fn class_fields_holding_functions_are_methods() {
+        let src = "class C {\n  run = () => 1;\n  limit = 3;\n  go() {}\n}\n";
+        let d = declarations(&parse(Lang::Ts, src).unwrap(), src);
+        let got: Vec<String> = functions(&d, &[], &[]).into_iter().map(|f| format!("{} {} {}", f.kind, f.name, f.start)).collect();
+        assert_eq!(got, vec!["class C 1", "method C.run 2", "method C.go 4"]);
+    }
+
+    #[test]
+    fn deletions_inside_a_function_mark_it_changed() {
+        // apply is lines 6-8: a deletion before line 8 is inside it; one before line 6 is not.
+        let changed = |deleted: &[usize]| functions(&decls(), &[], deleted).into_iter().filter(|f| f.changed).map(|f| f.name).collect::<Vec<_>>();
+        assert_eq!(changed(&[8]), vec!["apply"]);
+        assert!(changed(&[6]).is_empty());
     }
 
     #[test]

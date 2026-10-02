@@ -28,6 +28,8 @@ fn sample_merges_cleanly() {
     let apply = &m.cards[m.card_index("src/billing/apply.ts").unwrap()];
     assert_eq!((apply.name.as_str(), apply.dir.as_str()), ("apply.ts", "src/billing/"));
     assert_eq!(apply.outline[0].note, "Formats each amount with millsToDecimal.");
+    let mills = &m.cards[m.card_index("src/billing/mills.ts").unwrap()];
+    assert_eq!(mills.functions.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), vec!["toMills", "millsToDecimal"]);
     assert_eq!(m.cards[m.card_index("src/jobs/fee-writer.ts").unwrap()].kind, CardKind::Context);
 }
 

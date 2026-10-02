@@ -43,6 +43,9 @@ pub struct FileFacts {
     pub del: u32,
     pub diff: String,
     pub outline: Vec<OutlineItem>,
+    /// Absent from maps collected before the functions panel; those show it empty.
+    #[serde(default)]
+    pub functions: Vec<FunctionItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -51,6 +54,16 @@ pub struct OutlineItem {
     pub kind: String,
     pub start: usize,
     pub end: usize,
+}
+
+/// A function, class or method in the branch's version of a file; `changed` if the branch added lines inside it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FunctionItem {
+    pub name: String,
+    pub kind: String,
+    pub start: usize,
+    pub end: usize,
+    pub changed: bool,
 }
 
 /// Declaration order is strength: dedup keeps the greatest kind per (from, to).
@@ -87,6 +100,12 @@ pub fn to_json(facts: &Facts) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn files_without_functions_load_with_none() {
+        let f: FileFacts = serde_json::from_str(r#"{"path":"a.ts","status":"modified","binary":false,"add":1,"del":0,"diff":"","outline":[]}"#).unwrap();
+        assert!(f.functions.is_empty());
+    }
 
     #[test]
     fn kinds_serialize_kebab_and_order_by_strength() {
