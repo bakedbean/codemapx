@@ -1,4 +1,4 @@
-//! Dragging the borders between the map, the middle row and the diff, and wheel-scrolling the diff.
+//! Dragging the borders between the map, the middle row and the diff, and wheel-scrolling the pane under the pointer.
 
 use ratatui::{
     crossterm::event::{MouseButton, MouseEvent, MouseEventKind},
@@ -7,10 +7,10 @@ use ratatui::{
 
 use super::{
     MIN_ROW_H,
-    app::{App, Divider},
+    app::{App, Divider, Pane},
 };
 
-/// Lines one wheel notch moves the diff.
+/// Lines one wheel notch moves the diff; other panes move one item.
 const WHEEL_LINES: isize = 3;
 
 pub fn handle(app: &mut App, ev: MouseEvent) {
@@ -22,14 +22,25 @@ pub fn handle(app: &mut App, ev: MouseEvent) {
             }
         }
         MouseEventKind::Up(MouseButton::Left) => app.drag = None,
-        MouseEventKind::ScrollDown if over_diff(app, ev) => app.scroll_by(WHEEL_LINES),
-        MouseEventKind::ScrollUp if over_diff(app, ev) => app.scroll_by(-WHEEL_LINES),
+        MouseEventKind::ScrollDown => wheel(app, ev, 1),
+        MouseEventKind::ScrollUp => wheel(app, ev, -1),
         _ => {}
     }
 }
 
-fn over_diff(app: &App, ev: MouseEvent) -> bool {
-    app.panes[2].contains(Position::new(ev.column, ev.row))
+/// Moves the pane under the pointer without moving focus.
+fn wheel(app: &mut App, ev: MouseEvent, d: isize) {
+    let [map, _, diff] = app.panes;
+    let [from, inside, to] = app.mid_panes;
+    let at = Position::new(ev.column, ev.row);
+    let hit = [(Pane::Map, map), (Pane::From, from), (Pane::Inside, inside), (Pane::To, to), (Pane::Diff, diff)]
+        .into_iter()
+        .find(|(_, r)| r.contains(at));
+    match hit {
+        Some((Pane::Diff, _)) => app.scroll_by(d * WHEEL_LINES),
+        Some((p, _)) => app.move_pane(p, d),
+        None => {}
+    }
 }
 
 /// The divider under `row` — either line of the two borders that meet there — and the row's offset from it.

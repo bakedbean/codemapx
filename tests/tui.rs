@@ -244,7 +244,11 @@ fn c_expands_an_auto_collapsed_column_and_t_clears_it() {
 }
 
 fn mouse(app: &mut App, kind: MouseEventKind, row: u16) {
-    tui::mouse::handle(app, MouseEvent { kind, column: 40, row, modifiers: KeyModifiers::NONE });
+    mouse_at(app, kind, 40, row);
+}
+
+fn mouse_at(app: &mut App, kind: MouseEventKind, column: u16, row: u16) {
+    tui::mouse::handle(app, MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE });
 }
 
 fn drag(app: &mut App, from: u16, to: u16) {
@@ -312,7 +316,7 @@ fn clicks_off_a_border_do_not_resize() {
 }
 
 #[test]
-fn the_wheel_scrolls_the_diff_only_when_over_it() {
+fn the_wheel_scrolls_the_diff_three_lines_a_notch() {
     let mut a = app();
     tui::snapshot(&mut a, 180, 50);
     let diff = a.panes[2].y + 2;
@@ -321,7 +325,51 @@ fn the_wheel_scrolls_the_diff_only_when_over_it() {
     assert_eq!(a.scroll, 6);
     mouse(&mut a, MouseEventKind::ScrollUp, diff);
     assert_eq!(a.scroll, 3);
+}
+
+#[test]
+fn the_wheel_over_the_map_moves_the_selection_in_its_column() {
+    let mut a = app();
+    let col = a.map.columns.iter().find(|c| c.cards.len() > 1).unwrap().cards.clone();
+    a.select(col[0]);
+    tui::snapshot(&mut a, 180, 50);
     let map = a.panes[0].y + 2;
     mouse(&mut a, MouseEventKind::ScrollDown, map);
+    assert_eq!(a.cur, col[1]);
+    mouse(&mut a, MouseEventKind::ScrollUp, map);
+    assert_eq!(a.cur, col[0]);
+    assert_eq!(a.focus, Pane::Map);
+}
+
+#[test]
+fn the_wheel_moves_the_middle_pane_under_it_without_taking_focus() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    tui::snapshot(&mut a, 180, 50);
+    let [from, inside, to] = a.mid_panes;
+    let y = a.panes[1].y + 2;
+    mouse_at(&mut a, MouseEventKind::ScrollDown, from.x + 2, y);
+    assert_eq!(a.from.selected(), Some(1));
+    assert_eq!((a.to.selected(), a.inside.selected()), (Some(0), Some(0)));
+    mouse_at(&mut a, MouseEventKind::ScrollDown, to.x + 2, y);
+    assert_eq!(a.to.selected(), Some(0), "leads-to has one link");
+    assert!(a.hl.is_none());
+    mouse_at(&mut a, MouseEventKind::ScrollDown, inside.x + 2, y);
+    assert_eq!(a.inside.selected(), Some(0), "apply.ts has one outline entry");
+    assert!(a.hl.is_some(), "moving the outline jumps the diff");
+    assert_eq!(a.focus, Pane::Map);
+    assert_eq!(a.card().id, "src/billing/apply.ts");
+}
+
+#[test]
+fn the_wheel_does_nothing_over_hidden_panes_in_full_diff() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    key(&mut a, KeyCode::Char('d'));
+    tui::snapshot(&mut a, 180, 50);
+    assert_eq!(a.mid_panes, [ratatui::layout::Rect::default(); 3]);
+    let diff = a.panes[2].y + 2;
+    mouse(&mut a, MouseEventKind::ScrollDown, diff);
     assert_eq!(a.scroll, 3);
+    assert_eq!(a.card().id, "src/billing/apply.ts");
 }

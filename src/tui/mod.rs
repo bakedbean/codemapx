@@ -114,6 +114,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     ])
     .split(area);
     app.panes = [rows[2], rows[3], rows[4]];
+    app.mid_panes = [Rect::default(); 3];
     draw_header(f, app, rows[0]);
     if let Some(b) = &banner {
         f.render_widget(Paragraph::new(Span::styled(format!(" {b}"), Style::default().fg(AMBER).bold())), rows[1]);
@@ -189,7 +190,7 @@ pub fn run(app: &mut App) -> io::Result<()> {
     res
 }
 
-/// Mouse capture is for border drags and wheel-scrolling the diff; terminals still select text with shift/option-drag.
+/// Mouse capture is for border drags and wheel-scrolling the panes; terminals still select text with shift/option-drag.
 fn init() -> io::Result<ratatui::DefaultTerminal> {
     let term = ratatui::init();
     execute!(io::stdout(), EnableMouseCapture)?;
