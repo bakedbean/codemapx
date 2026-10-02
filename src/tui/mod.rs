@@ -5,12 +5,16 @@ mod diff_pane;
 pub mod keys;
 mod link_panes;
 pub mod map_pane;
+pub mod mouse;
 
 use std::{env, io, path::Path, process::Command};
 
 use ratatui::{
     backend::TestBackend,
-    crossterm::event::{self, Event, KeyEventKind},
+    crossterm::{
+        event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind},
+        execute,
+    },
     prelude::*,
     widgets::{Block, BorderType, Borders, Paragraph},
 };
@@ -98,11 +102,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
     let banner = app.banner();
     let banner_h = if banner.is_some() { 1 } else { 0 };
-    const MID_H: u16 = 16;
-    // The map gets at most 40% of the rows it shares with the diff (min: header + 3 cards); columns scroll.
-    let shared = area.height.saturating_sub(2 + banner_h + MID_H);
-    let map_h = (app.map.columns.iter().map(|c| c.cards.len()).max().unwrap_or(0) as u16 + 3).min((shared * 2 / 5).max(6));
-    let (map_c, mid_c) = if app.diff_full { (0, 0) } else { (map_h, MID_H) };
+    let (map_h, mid_h) = row_heights(app, area.height.saturating_sub(2 + banner_h));
+    let (map_c, mid_c) = if app.diff_full { (0, 0) } else { (map_h, mid_h) };
     let rows = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(banner_h),
@@ -112,6 +113,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Constraint::Length(1),
     ])
     .split(area);
+    app.panes = [rows[2], rows[3], rows[4]];
     draw_header(f, app, rows[0]);
     if let Some(b) = &banner {
         f.render_widget(Paragraph::new(Span::styled(format!(" {b}"), Style::default().fg(AMBER).bold())), rows[1]);
@@ -127,6 +129,22 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     });
     f.render_widget(Paragraph::new(Span::styled(help, Style::default().fg(DIM))), rows[5]);
 }
+
+/// Map and middle-row heights out of `avail` rows; dragged heights shrink to keep every row at least `MIN_ROW_H`.
+fn row_heights(app: &App, avail: u16) -> (u16, u16) {
+    const MID_H: u16 = 16;
+    if let Some((m, d)) = app.heights {
+        let m = m.clamp(MIN_ROW_H, avail.saturating_sub(2 * MIN_ROW_H).max(MIN_ROW_H));
+        return (m, d.clamp(MIN_ROW_H, avail.saturating_sub(m + MIN_ROW_H).max(MIN_ROW_H)));
+    }
+    // The map gets at most 40% of the rows it shares with the diff (min: header + 3 cards); columns scroll.
+    let shared = avail.saturating_sub(MID_H);
+    let map_h = (app.map.columns.iter().map(|c| c.cards.len()).max().unwrap_or(0) as u16 + 3).min((shared * 2 / 5).max(6));
+    (map_h, MID_H)
+}
+
+/// Borders plus one line of content.
+pub(crate) const MIN_ROW_H: u16 = 3;
 
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     let m = &app.map;
@@ -165,26 +183,42 @@ pub fn snapshot(app: &mut App, w: u16, h: u16) -> String {
 }
 
 pub fn run(app: &mut App) -> io::Result<()> {
-    let mut term = ratatui::init();
+    let mut term = init()?;
     let res = event_loop(&mut term, app);
-    ratatui::restore();
+    restore();
     res
+}
+
+/// Mouse capture is for border drags; terminals still select text with shift/option-drag.
+fn init() -> io::Result<ratatui::DefaultTerminal> {
+    let term = ratatui::init();
+    execute!(io::stdout(), EnableMouseCapture)?;
+    Ok(term)
+}
+
+fn restore() {
+    let _ = execute!(io::stdout(), DisableMouseCapture);
+    ratatui::restore();
 }
 
 fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<()> {
     loop {
         term.draw(|f| draw(f, app))?;
-        let Event::Key(key) = event::read()? else { continue };
-        if key.kind != KeyEventKind::Press {
-            continue;
-        }
+        let key = match event::read()? {
+            Event::Key(key) if key.kind == KeyEventKind::Press => key,
+            Event::Mouse(m) => {
+                mouse::handle(app, m);
+                continue;
+            }
+            _ => continue,
+        };
         match keys::handle(app, key) {
             Action::Quit => return Ok(()),
             Action::Open(path, line) => {
-                ratatui::restore();
+                restore();
                 let (t, e) = (env::var("CODEMAPX_EDITOR").ok(), env::var("EDITOR").ok());
                 let res = open_editor(&path, line, t.as_deref(), e.as_deref());
-                *term = ratatui::init();
+                *term = init()?;
                 term.clear()?;
                 if let Err(e) = res {
                     app.flash = Some(format!(" {e}"));

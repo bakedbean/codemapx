@@ -39,8 +39,11 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `c` | collapse or expand the column holding the selected card |
 | `C` | reset every column to the automatic layout |
 | `q` / `esc` | quit (`esc` first closes the full-screen diff) |
+| mouse drag | drag the border between two rows to resize them |
 
 `o` runs `$EDITOR +<line> <path>` (default `nvim`). For editors that take another form, set a template, e.g. `CODEMAPX_EDITOR='code -g {path}:{line}'`.
+
+The TUI captures the mouse for border drags; most terminals still select text with shift-drag (option-drag in iTerm2 and Terminal.app).
 
 The map wants about 170 columns. Below that, Tests and Docs collapse to counts; below 100 it asks for a wider terminal.
 

@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use ratatui::widgets::ListState;
+use ratatui::{layout::Rect, widgets::ListState};
 
 use super::map_pane::{self, ColumnView};
 use crate::{
@@ -62,6 +62,19 @@ pub struct App {
     pub col_overrides: Vec<Option<ColumnView>>,
     /// Width of the last drawn map, so `c` can flip what is on screen.
     pub map_width: u16,
+    /// Map and middle-row heights set by dragging a border; None sizes them automatically.
+    pub heights: Option<(u16, u16)>,
+    /// Map, middle row and diff as last drawn, so mouse rows can be hit-tested.
+    pub panes: [Rect; 3],
+    /// The border being dragged, and the grab row's offset from it.
+    pub drag: Option<(Divider, i32)>,
+}
+
+/// A draggable border: above the middle row, or above the diff.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Divider {
+    MapMid,
+    MidDiff,
 }
 
 impl App {
@@ -85,6 +98,9 @@ impl App {
             show_hidden: false,
             col_overrides: vec![None; ncols],
             map_width: map_pane::FULL_WIDTH,
+            heights: None,
+            panes: [Rect::default(); 3],
+            drag: None,
         };
         app.select(first);
         app
