@@ -110,9 +110,10 @@ fn link_panes_show_evidence() {
 }
 
 #[test]
-fn column_layout_collapses_tests_and_docs_below_170() {
+fn column_layout_starts_tests_and_docs_collapsed() {
     let names = ["Shared", "Apply", "Tests", "docs"];
-    assert_eq!(column_layout(&names, 180, false), Some(vec![Expanded; 4]));
+    assert_eq!(column_layout(&names, 180, false), Some(vec![Expanded, Expanded, Collapsed, Collapsed]));
+    assert_eq!(column_layout(&names, 180, true), Some(vec![Expanded; 4]));
     assert_eq!(column_layout(&names, 120, false), Some(vec![Expanded, Expanded, Collapsed, Collapsed]));
     assert_eq!(column_layout(&names, 120, true), Some(vec![Collapsed, Collapsed, Expanded, Expanded]));
     assert_eq!(column_layout(&["A", "B"], 120, false), Some(vec![Expanded; 2]));
@@ -182,4 +183,62 @@ fn tall_columns_scroll_and_leave_room_for_the_diff() {
 fn editor_spawn_failure_is_an_error() {
     let err = tui::open_editor(std::path::Path::new("/a.ts"), 3, Some("codemapx-no-such-editor {path}"), None).unwrap_err();
     assert!(err.contains("codemapx-no-such-editor"), "{err}");
+}
+
+#[test]
+fn map_up_down_stays_in_column() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    key(&mut a, KeyCode::Down);
+    assert_eq!(a.card().id, "src/billing/mills.ts");
+    key(&mut a, KeyCode::Up);
+    key(&mut a, KeyCode::Up);
+    assert_eq!(a.card().id, "src/billing/types.ts");
+}
+
+#[test]
+fn map_h_l_move_between_columns_keeping_row() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    key(&mut a, KeyCode::Char('l'));
+    assert_eq!(a.card().id, "src/jobs/fee-writer.ts");
+    key(&mut a, KeyCode::Char('l'));
+    assert_eq!(a.card().id, "src/api/legacy.ts");
+    key(&mut a, KeyCode::Char('l'));
+    assert_eq!(a.card().id, "src/billing/mills.test.ts");
+    key(&mut a, KeyCode::Char('h'));
+    key(&mut a, KeyCode::Char('h'));
+    key(&mut a, KeyCode::Char('h'));
+    key(&mut a, KeyCode::Char('h'));
+    assert_eq!(a.card().id, "src/billing/types.ts");
+}
+
+#[test]
+fn c_toggles_the_selected_cards_column_and_shift_c_resets() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    assert!(tui::snapshot(&mut a, 180, 52).contains("mills.ts"));
+    key(&mut a, KeyCode::Char('c'));
+    let frame = tui::snapshot(&mut a, 180, 52);
+    assert!(frame.contains("APPLY · 2"), "{frame}");
+    assert!(frame.contains("▶ selected"));
+    key(&mut a, KeyCode::Char('h'));
+    key(&mut a, KeyCode::Char('c'));
+    assert!(tui::snapshot(&mut a, 180, 52).contains("SHARED CONTRACT"));
+    key(&mut a, KeyCode::Char('c'));
+    assert!(!tui::snapshot(&mut a, 180, 52).contains("SHARED CONTRACTS · 2"));
+    key(&mut a, KeyCode::Char('C'));
+    assert!(!tui::snapshot(&mut a, 180, 52).contains("APPLY · 2"));
+}
+
+#[test]
+fn c_expands_an_auto_collapsed_column_and_t_clears_it() {
+    let mut a = app();
+    at(&mut a, "docs/apply.md");
+    assert!(tui::snapshot(&mut a, 120, 52).contains("DOCS · 1"));
+    key(&mut a, KeyCode::Char('c'));
+    assert!(!tui::snapshot(&mut a, 120, 52).contains("DOCS · 1"));
+    key(&mut a, KeyCode::Char('t'));
+    key(&mut a, KeyCode::Char('t'));
+    assert!(tui::snapshot(&mut a, 120, 52).contains("DOCS · 1"));
 }

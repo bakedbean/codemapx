@@ -1,10 +1,10 @@
  Apply regenerated fees  sample · feature/12-apply-fees · 1 commits · 8 files · +30 −4                                                                                     step 3/9
 ┏ map ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃SHARED CONTRACTS                    APPLY                               ENTRY POINT                         TESTS                               DOCS                              ┃
-┃◂ types.ts                      +5  ▶ apply.ts                      +6  ▸ route.ts                      +6    mills.test.ts              +5 −1    apply.md                      +3┃
-┃◂ mills.ts                      +5  ◂ fee-writer.ts                  ┆    legacy.ts                  +0 −3                                                                        ┃
-┃                                                                          fmt.ts                        +0                                                                        ┃
-┃                                                                          Enqueue regeneration   not built                                                                        ┃
+┃SHARED CONTRACTS                                APPLY                                           ENTRY POINT                                     TESTS · 1         DOCS · 1        ┃
+┃◂ types.ts                                  +5  ▶ apply.ts                                  +6  ▸ route.ts                                  +6                                    ┃
+┃◂ mills.ts                                  +5  ◂ fee-writer.ts                              ┆    legacy.ts                              +0 −3                                    ┃
+┃                                                                                                  fmt.ts                                    +0                                    ┃
+┃                                                                                                  Enqueue regeneration               not built                                    ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ╭ came from ─────────────────────────────────────────╮╭ apply.ts ────────────────────────────────────────────────────────────╮╭ leads to ──────────────────────────────────────────╮
 │mills.ts                                            ││src/billing/apply.ts                                                  ││route.ts                                            │
@@ -49,4 +49,4 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
- ←/→ step   tab pane   ↑/↓ move   ⏎ follow   o open in editor   d full diff   J/K page   t tests/docs   q quit
+ ←/→ step  tab pane  ↑/↓ move  h/l column  c collapse  ⏎ follow  o open  d full diff  J/K page  t tests/docs  q quit

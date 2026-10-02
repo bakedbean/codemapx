@@ -14,13 +14,19 @@ pub const FULL_WIDTH: u16 = 170;
 pub const MIN_WIDTH: u16 = 100;
 const COLLAPSED_W: u16 = 16;
 
+/// Columns `t` swaps with the rest when the terminal is too narrow for everything.
+pub fn hideable(name: &str) -> bool {
+    name.eq_ignore_ascii_case("tests") || name.eq_ignore_ascii_case("docs")
+}
+
 /// How each column renders at `width`; None when the map can't fit at all.
+/// Tests/docs start collapsed; `t` (show_hidden) expands them, swapping out the rest below FULL_WIDTH.
 pub fn column_layout(names: &[&str], width: u16, show_hidden: bool) -> Option<Vec<ColumnView>> {
     if width < MIN_WIDTH {
         return None;
     }
-    let hideable: Vec<bool> = names.iter().map(|n| n.eq_ignore_ascii_case("tests") || n.eq_ignore_ascii_case("docs")).collect();
-    if width >= FULL_WIDTH || !hideable.contains(&true) {
+    let hideable: Vec<bool> = names.iter().map(|n| hideable(n)).collect();
+    if !hideable.contains(&true) || (width >= FULL_WIDTH && show_hidden) {
         return Some(vec![ColumnView::Expanded; names.len()]);
     }
     Some(hideable.iter().map(|&h| if h != show_hidden { ColumnView::Collapsed } else { ColumnView::Expanded }).collect())
@@ -47,8 +53,7 @@ pub(super) fn draw(f: &mut Frame, app: &App, area: Rect) {
     let block = pane_block(Line::from(" map "), app.focus == Pane::Map);
     let inner = block.inner(area);
     f.render_widget(block, area);
-    let names: Vec<&str> = app.map.columns.iter().map(|c| c.name.as_str()).collect();
-    let views = column_layout(&names, area.width, app.show_hidden).unwrap_or_else(|| vec![ColumnView::Expanded; names.len()]);
+    let views = app.column_views(area.width);
     let constraints = views.iter().map(|v| match v {
         ColumnView::Expanded => Constraint::Fill(1),
         ColumnView::Collapsed => Constraint::Length(COLLAPSED_W),

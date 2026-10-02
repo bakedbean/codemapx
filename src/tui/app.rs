@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use ratatui::widgets::ListState;
 
+use super::map_pane::{self, ColumnView};
 use crate::{
     diff::hunk_start,
     facts::Status,
@@ -57,13 +58,16 @@ pub struct App {
     pub diff_full: bool,
     pub flash: Option<String>,
     pub show_hidden: bool,
-    map_order: Vec<usize>,
+    /// Per-column `c` choices, by column index; None follows `column_layout`.
+    pub col_overrides: Vec<Option<ColumnView>>,
+    /// Width of the last drawn map, so `c` can flip what is on screen.
+    pub map_width: u16,
 }
 
 impl App {
     pub fn new(map: Map, root: PathBuf) -> Self {
-        let map_order = map.columns.iter().flat_map(|c| c.cards.iter().copied()).collect();
         let first = map.trail.first().copied().unwrap_or(0);
+        let ncols = map.columns.len();
         let mut app = App {
             map,
             root,
@@ -79,7 +83,8 @@ impl App {
             diff_full: false,
             flash: None,
             show_hidden: false,
-            map_order,
+            col_overrides: vec![None; ncols],
+            map_width: map_pane::FULL_WIDTH,
         };
         app.select(first);
         app
@@ -164,9 +169,12 @@ impl App {
     pub fn move_in(&mut self, d: isize) {
         match self.focus {
             Pane::Map => {
-                let p = self.map_order.iter().position(|&i| i == self.cur).unwrap_or(0) as isize;
-                let n = self.map_order.len() as isize;
-                self.select(self.map_order[(p + d).rem_euclid(n) as usize]);
+                let cards = &self.map.columns[self.card().column].cards;
+                let p = cards.iter().position(|&i| i == self.cur).unwrap_or(0) as isize;
+                let i = cards[(p + d).clamp(0, cards.len() as isize - 1) as usize];
+                if i != self.cur {
+                    self.select(i);
+                }
             }
             Pane::From | Pane::To => {
                 let len = self.links(self.focus == Pane::From).len();
@@ -185,6 +193,48 @@ impl App {
                 }
             }
             Pane::Diff => self.scroll_by(d),
+        }
+    }
+
+    /// Moves the map selection to the next non-empty column in direction `d`, keeping the row where it can.
+    /// Context cards sit outside the trail, so this is how ←/→-only users reach them.
+    pub fn move_column(&mut self, d: isize) {
+        let cols = &self.map.columns;
+        let c = self.card().column;
+        let row = cols[c].cards.iter().position(|&i| i == self.cur).unwrap_or(0);
+        let mut n = c as isize + d;
+        while (0..cols.len() as isize).contains(&n) {
+            let cards = &cols[n as usize].cards;
+            if let Some(&i) = cards.get(row).or(cards.last()) {
+                self.select(i);
+                return;
+            }
+            n += d;
+        }
+    }
+
+    pub fn column_views(&self, width: u16) -> Vec<ColumnView> {
+        let names: Vec<&str> = self.map.columns.iter().map(|c| c.name.as_str()).collect();
+        let auto = map_pane::column_layout(&names, width, self.show_hidden).unwrap_or_else(|| vec![ColumnView::Expanded; names.len()]);
+        auto.into_iter().zip(&self.col_overrides).map(|(a, o)| o.unwrap_or(a)).collect()
+    }
+
+    /// Collapses or expands the column holding the selected card.
+    pub fn toggle_column(&mut self) {
+        let c = self.card().column;
+        self.col_overrides[c] = Some(match self.column_views(self.map_width)[c] {
+            ColumnView::Expanded => ColumnView::Collapsed,
+            ColumnView::Collapsed => ColumnView::Expanded,
+        });
+    }
+
+    /// `t`: swaps tests/docs with the rest, dropping `c` choices on tests/docs so the swap shows.
+    pub fn toggle_hidden(&mut self) {
+        self.show_hidden = !self.show_hidden;
+        for (o, col) in self.col_overrides.iter_mut().zip(&self.map.columns) {
+            if map_pane::hideable(&col.name) {
+                *o = None;
+            }
         }
     }
 

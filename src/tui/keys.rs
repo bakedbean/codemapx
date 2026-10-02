@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::app::{App, PANES};
+use super::app::{App, PANES, Pane};
 
 pub enum Action {
     None,
@@ -29,12 +29,16 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
             let p = PANES.iter().position(|p| *p == app.focus).unwrap_or(0);
             app.focus = PANES[(p + PANES.len() - 1) % PANES.len()];
         }
+        KeyCode::Char('h') if app.focus == Pane::Map => app.move_column(-1),
+        KeyCode::Char('l') if app.focus == Pane::Map => app.move_column(1),
         KeyCode::Up | KeyCode::Char('k') => app.move_in(-1),
         KeyCode::Down | KeyCode::Char('j') => app.move_in(1),
         KeyCode::Char('K') | KeyCode::PageUp => app.scroll_by(-15),
         KeyCode::Char('J') | KeyCode::PageDown => app.scroll_by(15),
         KeyCode::Enter => app.enter(),
-        KeyCode::Char('t') => app.show_hidden = !app.show_hidden,
+        KeyCode::Char('t') => app.toggle_hidden(),
+        KeyCode::Char('c') => app.toggle_column(),
+        KeyCode::Char('C') => app.col_overrides.fill(None),
         KeyCode::Char('d') => app.diff_full = !app.diff_full,
         KeyCode::Char('o') => match app.editor_target() {
             Some((path, line)) => return Action::Open(path, line),
