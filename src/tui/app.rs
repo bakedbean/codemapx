@@ -183,7 +183,12 @@ impl App {
     }
 
     pub fn move_in(&mut self, d: isize) {
-        match self.focus {
+        self.move_pane(self.focus, d);
+    }
+
+    /// ↑/↓ in `pane`, focused or not: the mouse wheel moves the pane under the pointer.
+    pub fn move_pane(&mut self, pane: Pane, d: isize) {
+        match pane {
             Pane::Map => {
                 let cards = &self.map.columns[self.card().column].cards;
                 let p = cards.iter().position(|&i| i == self.cur).unwrap_or(0) as isize;
@@ -193,8 +198,8 @@ impl App {
                 }
             }
             Pane::From | Pane::To => {
-                let len = self.links(self.focus == Pane::From).len();
-                let st = if self.focus == Pane::From { &mut self.from } else { &mut self.to };
+                let len = self.links(pane == Pane::From).len();
+                let st = if pane == Pane::From { &mut self.from } else { &mut self.to };
                 if len > 0 {
                     st.select(Some((st.selected().unwrap_or(0) as isize + d).clamp(0, len as isize - 1) as usize));
                 }
