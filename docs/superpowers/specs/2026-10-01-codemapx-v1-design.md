@@ -89,7 +89,7 @@ replaced by `__`.
     "kind": "export-use",          // import | export-use | test-pair
     "evidence": { "path": "src/billing/apply.ts", "line": 52, "quote": "const ins: Insertion[] = …" }
   }],
-  "warnings": ["src/broken.ts: parse failed, no outline"]
+  "warnings": ["src/broken.ts: parse errors, outline may be partial"]
 }
 ```
 
@@ -157,8 +157,9 @@ the branch name.
 **Outlines.** tree-sitter TypeScript, TSX and JavaScript grammars are compiled in, so nothing needs
 installing. Entries are top-level functions, classes, class methods, and exported
 `const`/`let`/`type`/`interface`/`enum` declarations in the file at HEAD. Only entries whose range
-overlaps a line added on the branch side are kept. Deleted files, non-TS files and files that fail
-to parse get no outline; a parse failure also adds a warning.
+overlaps a line added on the branch side are kept. Deleted files and non-TS files get no outline.
+A file with parse errors keeps the declarations tree-sitter recovered, minus any whose own name or
+signature was broken by recovery, and adds a warning that its outline may be partial.
 
 **Candidates.** Only between changed files. Each carries one evidence line.
 
