@@ -57,12 +57,10 @@ pub struct App {
     pub diff_full: bool,
     pub flash: Option<String>,
     pub show_hidden: bool,
-    map_order: Vec<usize>,
 }
 
 impl App {
     pub fn new(map: Map, root: PathBuf) -> Self {
-        let map_order = map.columns.iter().flat_map(|c| c.cards.iter().copied()).collect();
         let first = map.trail.first().copied().unwrap_or(0);
         let mut app = App {
             map,
@@ -79,7 +77,6 @@ impl App {
             diff_full: false,
             flash: None,
             show_hidden: false,
-            map_order,
         };
         app.select(first);
         app
@@ -164,9 +161,12 @@ impl App {
     pub fn move_in(&mut self, d: isize) {
         match self.focus {
             Pane::Map => {
-                let p = self.map_order.iter().position(|&i| i == self.cur).unwrap_or(0) as isize;
-                let n = self.map_order.len() as isize;
-                self.select(self.map_order[(p + d).rem_euclid(n) as usize]);
+                let cards = &self.map.columns[self.card().column].cards;
+                let p = cards.iter().position(|&i| i == self.cur).unwrap_or(0) as isize;
+                let i = cards[(p + d).clamp(0, cards.len() as isize - 1) as usize];
+                if i != self.cur {
+                    self.select(i);
+                }
             }
             Pane::From | Pane::To => {
                 let len = self.links(self.focus == Pane::From).len();
@@ -185,6 +185,23 @@ impl App {
                 }
             }
             Pane::Diff => self.scroll_by(d),
+        }
+    }
+
+    /// Moves the map selection to the next non-empty column in direction `d`, keeping the row where it can.
+    /// Context cards sit outside the trail, so this is how ←/→-only users reach them.
+    pub fn move_column(&mut self, d: isize) {
+        let cols = &self.map.columns;
+        let c = self.card().column;
+        let row = cols[c].cards.iter().position(|&i| i == self.cur).unwrap_or(0);
+        let mut n = c as isize + d;
+        while (0..cols.len() as isize).contains(&n) {
+            let cards = &cols[n as usize].cards;
+            if let Some(&i) = cards.get(row).or(cards.last()) {
+                self.select(i);
+                return;
+            }
+            n += d;
         }
     }
 

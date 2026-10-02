@@ -49,4 +49,4 @@
 │                                                                                                                                                                                  │
 │                                                                                                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
- ←/→ step   tab pane   ↑/↓ move   ⏎ follow   o open in editor   d full diff   J/K page   t tests/docs   q quit
+ ←/→ step   tab pane   ↑/↓ move   h/l column   ⏎ follow   o open   d full diff   J/K page   t tests/docs   q quit

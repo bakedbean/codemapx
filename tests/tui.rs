@@ -183,3 +183,31 @@ fn editor_spawn_failure_is_an_error() {
     let err = tui::open_editor(std::path::Path::new("/a.ts"), 3, Some("codemapx-no-such-editor {path}"), None).unwrap_err();
     assert!(err.contains("codemapx-no-such-editor"), "{err}");
 }
+
+#[test]
+fn map_up_down_stays_in_column() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    key(&mut a, KeyCode::Down);
+    assert_eq!(a.card().id, "src/billing/mills.ts");
+    key(&mut a, KeyCode::Up);
+    key(&mut a, KeyCode::Up);
+    assert_eq!(a.card().id, "src/billing/types.ts");
+}
+
+#[test]
+fn map_h_l_move_between_columns_keeping_row() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    key(&mut a, KeyCode::Char('l'));
+    assert_eq!(a.card().id, "src/jobs/fee-writer.ts");
+    key(&mut a, KeyCode::Char('l'));
+    assert_eq!(a.card().id, "src/api/legacy.ts");
+    key(&mut a, KeyCode::Char('l'));
+    assert_eq!(a.card().id, "src/billing/mills.test.ts");
+    key(&mut a, KeyCode::Char('h'));
+    key(&mut a, KeyCode::Char('h'));
+    key(&mut a, KeyCode::Char('h'));
+    key(&mut a, KeyCode::Char('h'));
+    assert_eq!(a.card().id, "src/billing/types.ts");
+}

@@ -29,7 +29,8 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 |---|---|
 | `←` `→` | step through the edits in reading order |
 | `tab` | move between panes |
-| `↑` `↓` | move within the focused pane |
+| `↑` `↓` | move within the focused pane (in the map, within the current column) |
+| `h` `l` | map pane: move to the next column left or right (reaches context cards, which are off the trail) |
 | `⏎` | in a came-from / leads-to pane, jump to that card; in the inside pane, focus the diff |
 | `o` | open the editor at the diff line, outline entry, or link evidence |
 | `d` | full-screen diff |
