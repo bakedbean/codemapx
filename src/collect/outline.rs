@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use tree_sitter::{Language, Node, Parser, Tree};
 
-use crate::facts::OutlineItem;
+use crate::facts::{FunctionItem, OutlineItem};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Lang {
@@ -76,7 +76,8 @@ fn push_decl(node: Node, exported: bool, src: &str, out: &mut Vec<Decl>) {
     if kind == "variable" {
         let mut c = node.walk();
         for d in node.named_children(&mut c).filter(|d| d.kind() == "variable_declarator") {
-            out.push(Decl { name: name(d), kind, start, end, exported });
+            let holds_fn = d.child_by_field_name("value").is_some_and(|v| matches!(v.kind(), "arrow_function" | "function_expression" | "function" | "generator_function"));
+            out.push(Decl { name: name(d), kind: if holds_fn { "function" } else { kind }, start, end, exported });
         }
         return;
     }
@@ -104,6 +105,15 @@ pub fn outline(decls: &[Decl], added: &[usize]) -> Vec<OutlineItem> {
         .filter(|d| matches!(d.kind, "function" | "class" | "method") || d.exported)
         .filter(|d| touches(d, added))
         .map(|d| OutlineItem { name: d.name.clone(), kind: d.kind.into(), start: d.start, end: d.end })
+        .collect()
+}
+
+/// Every function, class and method, for the functions panel.
+pub fn functions(decls: &[Decl], added: &[usize]) -> Vec<FunctionItem> {
+    decls
+        .iter()
+        .filter(|d| matches!(d.kind, "function" | "class" | "method"))
+        .map(|d| FunctionItem { name: d.name.clone(), kind: d.kind.into(), start: d.start, end: d.end, changed: touches(d, added) })
         .collect()
 }
 
@@ -151,6 +161,20 @@ mod tests {
     fn changed_exports_are_exported_declarations_touching_added_lines() {
         let got: Vec<String> = changed_exports(&decls(), &[4, 7, 12, 20, 21]).into_iter().collect();
         assert_eq!(got, vec!["Id", "apply"]);
+    }
+
+    #[test]
+    fn functions_lists_every_function_class_and_method_marking_changed_ones() {
+        let got: Vec<String> = functions(&decls(), &[7]).into_iter().map(|f| format!("{} {} {}", f.kind, f.name, f.changed)).collect();
+        assert_eq!(got, vec!["function apply true", "class Writer false", "method Writer.write false"]);
+    }
+
+    #[test]
+    fn consts_holding_functions_are_functions() {
+        let src = "export const a = () => 1;\nconst b = function () {\n  return 2;\n};\nconst c = 3;\n";
+        let d = declarations(&parse(Lang::Ts, src).unwrap(), src);
+        let got: Vec<(&str, &str, usize, usize)> = d.iter().map(|d| (d.name.as_str(), d.kind, d.start, d.end)).collect();
+        assert_eq!(got, vec![("a", "function", 1, 1), ("b", "function", 2, 4), ("c", "variable", 5, 5)]);
     }
 
     #[test]

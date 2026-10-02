@@ -33,7 +33,7 @@ pub fn collect(git: &Git, base: Option<&str>) -> Result<Facts, String> {
         let added: Vec<(usize, String)> = diff::added_lines(&diff).into_iter().map(|(n, t)| (n, t.to_string())).collect();
         let added_nums: Vec<usize> = added.iter().map(|(n, _)| *n).collect();
         let src = if c.status == Status::Deleted || c.binary { None } else { read(&c.path) };
-        let (mut items, mut imps, mut exports) = (vec![], vec![], BTreeSet::new());
+        let (mut items, mut fns, mut imps, mut exports) = (vec![], vec![], vec![], BTreeSet::new());
         if let (Some(src), Some(lang)) = (&src, outline::lang_for(&c.path))
             && let Some(tree) = outline::parse(lang, src)
         {
@@ -43,6 +43,7 @@ pub fn collect(git: &Git, base: Option<&str>) -> Result<Facts, String> {
             } else {
                 let decls = outline::declarations(&tree, src);
                 items = outline::outline(&decls, &added_nums);
+                fns = outline::functions(&decls, &added_nums);
                 exports = outline::changed_exports(&decls, &added_nums);
             }
         }
@@ -63,6 +64,7 @@ pub fn collect(git: &Git, base: Option<&str>) -> Result<Facts, String> {
             del: c.del,
             diff,
             outline: items,
+            functions: fns,
         });
     }
     let existing: BTreeSet<&str> = infos.iter().filter(|f| f.exists).map(|f| f.path.as_str()).collect();
