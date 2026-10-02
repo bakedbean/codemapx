@@ -34,7 +34,7 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `⏎` | in a came-from / leads-to pane, jump to that card; in the inside or functions pane, focus the diff |
 | `o` | open the editor at the diff line, outline entry, function, or link evidence |
 | `d` | full-screen diff |
-| `f` | show or hide the functions panel left of the diff: every function, class and method in a TS/JS file, `+` on the ones this branch changed; moving in it jumps the diff to that function |
+| `f` | show or hide the functions panel left of the diff: a TS/JS file's top-level functions (including consts holding one), classes and their methods, `+` on those this branch added or deleted lines inside; moving in it jumps the diff to that function, or clears the highlight if the diff doesn't show it |
 | `J` `K` | page the diff |
 | `t` | expand the Tests/Docs columns, which start collapsed (in narrow terminals this collapses the others) |
 | `c` | collapse or expand the column holding the selected card |

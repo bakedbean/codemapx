@@ -43,7 +43,7 @@ pub fn collect(git: &Git, base: Option<&str>) -> Result<Facts, String> {
             } else {
                 let decls = outline::declarations(&tree, src);
                 items = outline::outline(&decls, &added_nums);
-                fns = outline::functions(&decls, &added_nums);
+                fns = outline::functions(&decls, &added_nums, &diff::deleted_at(&diff));
                 exports = outline::changed_exports(&decls, &added_nums);
             }
         }

@@ -102,6 +102,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn files_without_functions_load_with_none() {
+        let f: FileFacts = serde_json::from_str(r#"{"path":"a.ts","status":"modified","binary":false,"add":1,"del":0,"diff":"","outline":[]}"#).unwrap();
+        assert!(f.functions.is_empty());
+    }
+
+    #[test]
     fn kinds_serialize_kebab_and_order_by_strength() {
         assert_eq!(serde_json::to_string(&CandidateKind::ExportUse).unwrap(), "\"export-use\"");
         assert!(CandidateKind::ExportUse > CandidateKind::Import && CandidateKind::Import > CandidateKind::TestPair);
