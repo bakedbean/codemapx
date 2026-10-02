@@ -6,7 +6,7 @@ use ratatui::{layout::Rect, widgets::ListState};
 
 use super::map_pane::{self, ColumnView};
 use crate::{
-    diff::hunk_start,
+    diff::{hunk_first, hunk_start},
     facts::Status,
     map::{Card, CardKind, Map},
 };
@@ -76,16 +76,23 @@ pub struct App {
     pub fns_pane: Rect,
     /// Functions panel width set by dragging its border; None uses the default.
     pub fns_width: Option<u16>,
+    /// `m` shows or hides the minimap beside the diff.
+    pub show_minimap: bool,
+    /// The minimap as last drawn (empty when hidden).
+    pub minimap: Rect,
+    /// Minimap width set by dragging its border; None uses the default.
+    pub minimap_width: Option<u16>,
     /// The border being dragged, and the grab row's offset from it.
     pub drag: Option<(Divider, i32)>,
 }
 
-/// A draggable border: above the middle row, above the diff, or between the functions panel and the diff.
+/// A draggable border: above the middle row, above the diff, or between the diff and the panel on either side of it.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Divider {
     MapMid,
     MidDiff,
     FnsDiff,
+    DiffMinimap,
 }
 
 impl App {
@@ -116,6 +123,9 @@ impl App {
             mid_panes: [Rect::default(); 3],
             show_fns: true,
             fns_pane: Rect::default(),
+            show_minimap: true,
+            minimap: Rect::default(),
+            minimap_width: None,
             drag: None,
         };
         app.select(first);
@@ -173,7 +183,10 @@ impl App {
             CardKind::Missing => vec![note("Not built yet."), note(&c.what)],
             CardKind::Changed if c.binary => vec![note("Binary file; no diff.")],
             CardKind::Changed if c.diff.is_empty() => vec![note("No content change (rename only).")],
-            CardKind::Changed => numbered(&c.diff),
+            CardKind::Changed => match &c.source {
+                Some(src) => whole_file(&c.diff, src),
+                None => numbered(&c.diff),
+            },
         }
     }
 
@@ -380,5 +393,31 @@ fn numbered(diff: &str) -> Vec<DLine> {
             n += 1;
         }
     }
+    out
+}
+
+/// The whole HEAD file with the diff's deletions and additions in place; hunk headers are dropped.
+fn whole_file(diff: &str, src: &str) -> Vec<DLine> {
+    let src: Vec<&str> = src.lines().collect();
+    let mut out = vec![];
+    let mut n = 1usize;
+    let ctx_to = |out: &mut Vec<DLine>, n: &mut usize, end: usize| {
+        while *n < end && *n <= src.len() {
+            out.push(DLine { n: Some(*n), kind: Kind::Ctx, text: format!(" {}", src[*n - 1]) });
+            *n += 1;
+        }
+    };
+    for l in diff.lines() {
+        if let Some(rest) = l.strip_prefix("@@ ") {
+            ctx_to(&mut out, &mut n, hunk_first(rest));
+        } else if l.starts_with('-') {
+            out.push(DLine { n: None, kind: Kind::Del, text: l.into() });
+        } else if !l.starts_with('\\') {
+            let kind = if l.starts_with('+') { Kind::Add } else { Kind::Ctx };
+            out.push(DLine { n: Some(n), kind, text: l.into() });
+            n += 1;
+        }
+    }
+    ctx_to(&mut out, &mut n, usize::MAX);
     out
 }

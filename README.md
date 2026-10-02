@@ -33,15 +33,16 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `h` `l` | map pane: move to the next column left or right (reaches context cards, which are off the trail) |
 | `⏎` | in a came-from / leads-to pane, jump to that card; in the inside or functions pane, focus the diff |
 | `o` | open the editor at the diff line, outline entry, function, or link evidence |
-| `d` | full-screen diff |
-| `f` | show or hide the functions panel left of the diff: a TS/JS file's top-level functions (including consts holding one), classes and their methods, `+` on those this branch added or deleted lines inside; moving in it jumps the diff to that function, or clears the highlight if the diff doesn't show it |
+| `d` | full-screen diff (the diff pane always shows the whole file, with the changes in place) |
+| `m` | show or hide the minimap right of the diff: the whole file shrunk to fit, added lines green, deleted lines red, the visible part shaded; click it to jump there |
+| `f` | show or hide the functions panel left of the diff: a TS/JS file's top-level functions (including consts holding one), classes and their methods, `+` on those this branch added or deleted lines inside; moving in it jumps the diff to that function |
 | `J` `K` | page the diff |
 | `t` | expand the Tests/Docs columns, which start collapsed (in narrow terminals this collapses the others) |
 | `c` | collapse or expand the column holding the selected card |
 | `C` | reset every column to the automatic layout |
 | `q` / `esc` | quit (`esc` first closes the full-screen diff) |
-| mouse drag | drag the border between two rows, or between the functions panel and the diff, to resize them |
-| mouse wheel | move the pane under the pointer: scroll the diff, or ↑/↓ in the map and middle panes (focus stays put) |
+| mouse drag | drag the border between two rows, or between the diff and the functions panel or minimap, to resize them |
+| mouse wheel | move the pane under the pointer: scroll the diff (also over the minimap), or ↑/↓ in the map and middle panes (focus stays put) |
 
 `o` runs `$EDITOR +<line> <path>` (default `nvim`). For editors that take another form, set a template, e.g. `CODEMAPX_EDITOR='code -g {path}:{line}'`.
 

@@ -2,11 +2,25 @@
 
 /// `+start` of a hunk header's text after `@@ `.
 pub fn hunk_start(rest: &str) -> usize {
-    rest.split_whitespace()
-        .find_map(|t| t.strip_prefix('+'))
-        .and_then(|t| t.split(',').next())
-        .and_then(|t| t.parse().ok())
-        .unwrap_or(0)
+    hunk_new(rest).0
+}
+
+/// `+start,count` of a hunk header's text after `@@ `; count defaults to 1 as in git.
+pub fn hunk_new(rest: &str) -> (usize, usize) {
+    let Some(t) = rest.split_whitespace().find_map(|t| t.strip_prefix('+')) else {
+        return (0, 0);
+    };
+    let mut it = t.split(',');
+    let start = it.next().and_then(|t| t.parse().ok()).unwrap_or(0);
+    (start, it.next().and_then(|t| t.parse().ok()).unwrap_or(1))
+}
+
+/// First branch-side line a hunk covers; an empty `+start,0` side sits after line `start`.
+pub fn hunk_first(rest: &str) -> usize {
+    match hunk_new(rest) {
+        (start, 0) => start + 1,
+        (start, _) => start,
+    }
 }
 
 /// Added lines as (branch-side line number, text without the `+`).
@@ -51,6 +65,13 @@ mod tests {
     fn numbers_added_lines_on_branch_side() {
         let d = "@@ -1,3 +1,4 @@\n a\n-b\n+B\n+C\n c\n@@ -10,2 +11,2 @@\n x\n+y\n\\ No newline at end of file";
         assert_eq!(added_lines(d), vec![(2, "B"), (3, "C"), (12, "y")]);
+    }
+
+    #[test]
+    fn hunk_first_handles_empty_branch_sides() {
+        assert_eq!(hunk_first("-1,3 +4,2 @@"), 4);
+        assert_eq!(hunk_first("-5,2 +4,0 @@"), 5);
+        assert_eq!(hunk_first("-5 +7 @@ fn x"), 7);
     }
 
     #[test]

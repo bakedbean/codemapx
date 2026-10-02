@@ -522,10 +522,10 @@ fn functions_drags_clamp_the_panel_and_leave_the_diff_forty_columns() {
     assert_eq!(a.fns_pane.width, 16);
     let x = a.fns_pane.right() - 1;
     drag_across(&mut a, row, x, 179);
-    assert_eq!(a.fns_pane.width, 140);
+    assert_eq!(a.fns_pane.width, 120, "180 minus the 20-column minimap and 40 for the diff");
     // A narrower terminal squeezes the dragged panel before the diff.
     tui::snapshot(&mut a, 150, 50);
-    assert_eq!(a.fns_pane.width, 110);
+    assert_eq!(a.fns_pane.width, 90);
 }
 
 #[test]
@@ -574,4 +574,97 @@ fn the_functions_border_drags_in_full_diff() {
     let p = a.fns_pane;
     drag_across(&mut a, p.y + 2, p.right() - 1, p.right() + 4);
     assert_eq!(a.fns_pane.width, p.width + 5);
+}
+
+#[test]
+fn the_diff_shows_the_whole_file_with_changes_in_place() {
+    let mut m = common::sample_map();
+    let i = m.card_index("src/billing/mills.ts").unwrap();
+    let src: String = (1..=20).map(|n| format!("l{n}\n")).collect::<String>().replace("l10\n", "L10\n");
+    m.cards[i].source = Some(src);
+    m.cards[i].diff = "@@ -2,2 +2,1 @@\n l2\n-gone\n@@ -11,1 +10,1 @@\n-l10\n+L10".into();
+    let mut a = App::new(m, PathBuf::from("/wt"));
+    a.select(i);
+    let lines: Vec<(Option<usize>, String)> = a.lines.iter().map(|l| (l.n, l.text.clone())).collect();
+    assert_eq!(lines.len(), 22, "20 lines plus two deletions");
+    assert_eq!(lines[0], (Some(1), " l1".into()));
+    assert_eq!(lines[2], (None, "-gone".into()));
+    assert_eq!(lines[3], (Some(3), " l3".into()));
+    assert_eq!(lines[10], (None, "-l10".into()));
+    assert_eq!(lines[11], (Some(10), "+L10".into()));
+    assert_eq!(lines[21], (Some(20), " l20".into()));
+    assert!(lines.iter().all(|(_, t)| !t.starts_with("@@")));
+}
+
+#[test]
+fn the_minimap_sits_right_of_the_diff_and_m_toggles_it() {
+    let mut a = fns_app();
+    let frame = tui::snapshot(&mut a, 180, 50);
+    assert!(frame.contains("╭ minimap "), "{frame}");
+    assert_eq!((a.minimap.right(), a.minimap.width), (180, 20));
+    key(&mut a, KeyCode::Char('m'));
+    assert!(!tui::snapshot(&mut a, 180, 50).contains("╭ minimap "));
+    assert_eq!(a.minimap, ratatui::layout::Rect::default());
+    key(&mut a, KeyCode::Char('m'));
+    assert!(tui::snapshot(&mut a, 180, 50).contains("╭ minimap "));
+}
+
+#[test]
+fn dragging_the_minimap_border_resizes_it_and_leaves_the_diff_forty_columns() {
+    let mut a = fns_app();
+    let m = a.minimap;
+    let row = m.y + 2;
+    drag_across(&mut a, row, m.x, m.x - 10);
+    assert_eq!(a.minimap.width, 30);
+    // The diff's own right border is a handle too.
+    let x = a.minimap.x - 1;
+    drag_across(&mut a, row, x, x + 4);
+    assert_eq!(a.minimap.width, 26);
+    let x = a.minimap.x;
+    drag_across(&mut a, row, x, 0);
+    assert_eq!(a.minimap.width, 140);
+    let x = a.minimap.x;
+    drag_across(&mut a, row, x, 179);
+    assert_eq!(a.minimap.width, 8);
+}
+
+fn long_file_app() -> App {
+    let mut m = common::sample_map();
+    let i = m.card_index("src/billing/mills.ts").unwrap();
+    let src: String = (1..=400).map(|n| format!("line {n}\n")).collect::<String>().replace("line 300\n", "LINE 300\n");
+    m.cards[i].source = Some(src);
+    m.cards[i].diff = "@@ -300,1 +300,1 @@\n-line 300\n+LINE 300".into();
+    let mut a = App::new(m, PathBuf::from("/wt"));
+    a.select(i);
+    tui::snapshot(&mut a, 180, 50);
+    a
+}
+
+#[test]
+fn clicking_the_minimap_centres_the_diff_there_and_the_wheel_scrolls_it() {
+    let mut a = long_file_app();
+    let m = a.minimap;
+    let bottom = m.bottom() - 2;
+    mouse_at(&mut a, MouseEventKind::Down(MouseButton::Left), m.x + 3, bottom);
+    mouse_at(&mut a, MouseEventKind::Up(MouseButton::Left), m.x + 3, bottom);
+    assert!(a.scroll > 300, "jumped near the end, got {}", a.scroll);
+    mouse_at(&mut a, MouseEventKind::Down(MouseButton::Left), m.x + 3, m.y + 1);
+    assert_eq!(a.scroll, 0);
+    mouse_at(&mut a, MouseEventKind::ScrollDown, m.x + 3, m.y + 4);
+    assert_eq!(a.scroll, 3);
+    assert!(a.drag.is_none() && a.minimap_width.is_none());
+}
+
+#[test]
+fn the_minimap_colours_the_changed_rows() {
+    let mut a = long_file_app();
+    let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(180, 50)).unwrap();
+    term.draw(|f| tui::draw(f, &mut a)).unwrap();
+    let m = a.minimap;
+    let buf = term.backend().buffer();
+    let green = |y: u16| (m.x + 1..m.right() - 1).any(|x| [buf[(x, y)].fg, buf[(x, y)].bg].contains(&ratatui::style::Color::Rgb(111, 207, 127)));
+    let rows: Vec<u16> = (m.y + 1..m.bottom() - 1).filter(|&y| green(y)).collect();
+    assert_eq!(rows.len(), 1, "one changed row, got {rows:?}");
+    let frac = (rows[0] - m.y - 1) as f32 / (m.height - 2) as f32;
+    assert!((0.65..0.8).contains(&frac), "change about 3/4 down, at {frac}");
 }

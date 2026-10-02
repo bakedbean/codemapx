@@ -6,6 +6,7 @@ mod fns_pane;
 pub mod keys;
 mod link_panes;
 pub mod map_pane;
+mod minimap;
 pub mod mouse;
 
 use std::{env, io, path::Path, process::Command};
@@ -98,6 +99,7 @@ pub(crate) fn pane_block(title: Line<'static>, focused: bool) -> Block<'static> 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
     app.fns_pane = Rect::default();
+    app.minimap = Rect::default();
     if area.width < map_pane::MIN_WIDTH {
         if app.focus == Pane::Functions {
             app.focus = Pane::Diff;
@@ -129,18 +131,24 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         map_pane::draw(f, app, rows[2]);
         link_panes::draw(f, app, rows[3]);
     }
-    let mut diff = rows[4];
-    if app.show_fns && area.width >= fns_pane::MIN_TERM_WIDTH {
-        let cols = Layout::horizontal([Constraint::Length(fns_pane::width(app.fns_width, rows[4].width)), Constraint::Min(0)]).split(rows[4]);
-        app.fns_pane = cols[0];
-        diff = cols[1];
-        fns_pane::draw(f, app, cols[0]);
-    } else if app.focus == Pane::Functions {
+    let row = rows[4];
+    let mm_w = if app.show_minimap { minimap::width(app.minimap_width, row.width) } else { 0 };
+    let fns_w = if app.show_fns && area.width >= fns_pane::MIN_TERM_WIDTH { fns_pane::width(app.fns_width, row.width - mm_w) } else { 0 };
+    if fns_w == 0 && app.focus == Pane::Functions {
         app.focus = Pane::Diff;
+    }
+    let [fns, diff, mm] = Layout::horizontal([Constraint::Length(fns_w), Constraint::Min(0), Constraint::Length(mm_w)]).areas(row);
+    if fns_w > 0 {
+        app.fns_pane = fns;
+        fns_pane::draw(f, app, fns);
+    }
+    if mm_w > 0 {
+        app.minimap = mm;
+        minimap::draw(f, app, mm, diff.height.saturating_sub(2) as usize);
     }
     diff_pane::draw(f, app, diff);
     let help = app.flash.clone().unwrap_or_else(|| {
-        " ←/→ step  tab pane  ↑/↓ move  h/l col  c collapse  ⏎ follow  o open  d full diff  f fns  J/K page  t tests/docs  q quit".into()
+        " ←/→ step  tab pane  ↑/↓ move  h/l col  c fold  ⏎ follow  o open  d full  f fns  m minimap  J/K page  t tests  q quit".into()
     });
     f.render_widget(Paragraph::new(Span::styled(help, Style::default().fg(DIM))), rows[5]);
 }
