@@ -56,6 +56,9 @@ pub struct Card {
     pub add: u32,
     pub del: u32,
     pub diff: String,
+    /// The file at HEAD, so the diff can show it whole; None when there is no HEAD side to show.
+    #[serde(skip)]
+    pub source: Option<String>,
     pub outline: Vec<MapOutline>,
     pub functions: Vec<FunctionItem>,
     pub column: usize,
@@ -180,7 +183,13 @@ pub fn merge(facts: &Facts, ann: &Annotations, read_head: &dyn Fn(&str) -> Optio
     if !p.is_empty() {
         return Err(p);
     }
-    Ok(build(facts, ann, &changed, &context, &placed, &cands))
+    let mut map = build(facts, ann, &changed, &context, &placed, &cands);
+    for c in &mut map.cards {
+        if matches!(c.kind, CardKind::Changed) && !c.binary && c.status != Some(Status::Deleted) && !c.diff.is_empty() {
+            c.source = c.path.as_deref().and_then(read_head);
+        }
+    }
+    Ok(map)
 }
 
 fn check_quote(ev: &Evidence, read_head: &dyn Fn(&str) -> Option<String>) -> Option<String> {
@@ -271,6 +280,7 @@ fn changed_card(f: &FileFacts, ann: &Annotations, column: usize) -> Card {
         add: f.add,
         del: f.del,
         diff: f.diff.clone(),
+        source: None,
         outline: f
             .outline
             .iter()
@@ -301,6 +311,7 @@ fn context_card(c: &ContextCard, column: usize) -> Card {
         add: 0,
         del: 0,
         diff: String::new(),
+        source: None,
         outline: vec![],
         functions: vec![],
         column,
@@ -320,6 +331,7 @@ fn missing_card(m: &Missing, column: usize) -> Card {
         add: 0,
         del: 0,
         diff: String::new(),
+        source: None,
         outline: vec![],
         functions: vec![],
         column,

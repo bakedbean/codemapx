@@ -575,3 +575,23 @@ fn the_functions_border_drags_in_full_diff() {
     drag_across(&mut a, p.y + 2, p.right() - 1, p.right() + 4);
     assert_eq!(a.fns_pane.width, p.width + 5);
 }
+
+#[test]
+fn the_diff_shows_the_whole_file_with_changes_in_place() {
+    let mut m = common::sample_map();
+    let i = m.card_index("src/billing/mills.ts").unwrap();
+    let src: String = (1..=20).map(|n| format!("l{n}\n")).collect::<String>().replace("l10\n", "L10\n");
+    m.cards[i].source = Some(src);
+    m.cards[i].diff = "@@ -2,2 +2,1 @@\n l2\n-gone\n@@ -11,1 +10,1 @@\n-l10\n+L10".into();
+    let mut a = App::new(m, PathBuf::from("/wt"));
+    a.select(i);
+    let lines: Vec<(Option<usize>, String)> = a.lines.iter().map(|l| (l.n, l.text.clone())).collect();
+    assert_eq!(lines.len(), 22, "20 lines plus two deletions");
+    assert_eq!(lines[0], (Some(1), " l1".into()));
+    assert_eq!(lines[2], (None, "-gone".into()));
+    assert_eq!(lines[3], (Some(3), " l3".into()));
+    assert_eq!(lines[10], (None, "-l10".into()));
+    assert_eq!(lines[11], (Some(10), "+L10".into()));
+    assert_eq!(lines[21], (Some(20), " l20".into()));
+    assert!(lines.iter().all(|(_, t)| !t.starts_with("@@")));
+}
