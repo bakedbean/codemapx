@@ -32,6 +32,7 @@ fn link_items(app: &App, links: &[(usize, usize)], color: Color, width: usize) -
 
 pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     let cols = Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(40), Constraint::Percentage(30)]).split(area);
+    app.mid_panes = [cols[0], cols[1], cols[2]];
 
     for (k, incoming) in [(0usize, true), (2usize, false)] {
         let pane = if incoming { Pane::From } else { Pane::To };

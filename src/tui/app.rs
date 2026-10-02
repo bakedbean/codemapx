@@ -66,6 +66,8 @@ pub struct App {
     pub heights: Option<(u16, u16)>,
     /// Map, middle row and diff as last drawn, so mouse rows can be hit-tested.
     pub panes: [Rect; 3],
+    /// From, Inside and To as last drawn (empty when hidden), so the wheel can find the pane under it.
+    pub mid_panes: [Rect; 3],
     /// The border being dragged, and the grab row's offset from it.
     pub drag: Option<(Divider, i32)>,
 }
@@ -100,6 +102,7 @@ impl App {
             map_width: map_pane::FULL_WIDTH,
             heights: None,
             panes: [Rect::default(); 3],
+            mid_panes: [Rect::default(); 3],
             drag: None,
         };
         app.select(first);
