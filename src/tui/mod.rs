@@ -131,7 +131,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
     let mut diff = rows[4];
     if app.show_fns && area.width >= fns_pane::MIN_TERM_WIDTH {
-        let cols = Layout::horizontal([Constraint::Length(fns_pane::WIDTH), Constraint::Min(0)]).split(rows[4]);
+        let cols = Layout::horizontal([Constraint::Length(fns_pane::width(app.fns_width, rows[4].width)), Constraint::Min(0)]).split(rows[4]);
         app.fns_pane = cols[0];
         diff = cols[1];
         fns_pane::draw(f, app, cols[0]);
