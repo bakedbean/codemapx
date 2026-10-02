@@ -483,3 +483,95 @@ fn too_narrow_drops_the_functions_panel_and_its_focus() {
     assert_eq!(a.fns_pane, ratatui::layout::Rect::default());
     assert_eq!(a.focus, Pane::Diff);
 }
+
+/// Drags along `row` from column `from` to `to`, then redraws.
+fn drag_across(app: &mut App, row: u16, from: u16, to: u16) {
+    mouse_at(app, MouseEventKind::Down(MouseButton::Left), from, row);
+    mouse_at(app, MouseEventKind::Drag(MouseButton::Left), to, row);
+    mouse_at(app, MouseEventKind::Up(MouseButton::Left), to, row);
+    tui::snapshot(app, 180, 50);
+}
+
+fn fns_app() -> App {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    tui::snapshot(&mut a, 180, 50);
+    a
+}
+
+#[test]
+fn dragging_the_functions_border_widens_and_narrows_the_panel() {
+    let mut a = fns_app();
+    let (p, diff) = (a.fns_pane, a.panes[2]);
+    let row = p.y + 2;
+    drag_across(&mut a, row, p.right() - 1, p.right() + 9);
+    assert_eq!(a.fns_pane.width, p.width + 10);
+    assert_eq!(a.panes[2], diff, "the diff row itself does not move");
+    // The diff's own left border is a handle too, and grabbing it does not jump.
+    let x = a.fns_pane.right();
+    drag_across(&mut a, row, x, x - 6);
+    assert_eq!(a.fns_pane.width, p.width + 4);
+}
+
+#[test]
+fn functions_drags_clamp_the_panel_and_leave_the_diff_forty_columns() {
+    let mut a = fns_app();
+    let row = a.fns_pane.y + 2;
+    let x = a.fns_pane.right() - 1;
+    drag_across(&mut a, row, x, 0);
+    assert_eq!(a.fns_pane.width, 16);
+    let x = a.fns_pane.right() - 1;
+    drag_across(&mut a, row, x, 179);
+    assert_eq!(a.fns_pane.width, 140);
+    // A narrower terminal squeezes the dragged panel before the diff.
+    tui::snapshot(&mut a, 150, 50);
+    assert_eq!(a.fns_pane.width, 110);
+}
+
+#[test]
+fn clicks_off_the_functions_border_do_not_resize_it() {
+    let mut a = fns_app();
+    let p = a.fns_pane;
+    drag_across(&mut a, p.y + 2, p.right() + 2, p.right() + 8);
+    drag_across(&mut a, p.y + 2, p.right() - 3, p.right() + 8);
+    assert_eq!(a.fns_pane, p);
+    assert!(a.fns_width.is_none());
+    // On the diff's top border the row divider wins.
+    let [_, mid, _] = heights(&a);
+    drag_across(&mut a, p.y, p.right() - 1, p.right() + 8);
+    assert_eq!(a.fns_pane.width, p.width);
+    assert_eq!(heights(&a)[1], mid);
+    assert!(a.drag.is_none());
+}
+
+#[test]
+fn a_hidden_functions_panel_has_no_border_to_grab() {
+    let mut a = fns_app();
+    let p = a.fns_pane;
+    key(&mut a, KeyCode::Char('f'));
+    tui::snapshot(&mut a, 180, 50);
+    drag_across(&mut a, p.y + 2, p.right() - 1, p.right() + 9);
+    assert!(a.fns_width.is_none());
+}
+
+#[test]
+fn the_dragged_functions_width_survives_f_and_card_changes() {
+    let mut a = fns_app();
+    let p = a.fns_pane;
+    drag_across(&mut a, p.y + 2, p.right() - 1, p.right() + 9);
+    key(&mut a, KeyCode::Char('f'));
+    key(&mut a, KeyCode::Char('f'));
+    at(&mut a, "src/billing/apply.ts");
+    tui::snapshot(&mut a, 180, 50);
+    assert_eq!(a.fns_pane.width, p.width + 10);
+}
+
+#[test]
+fn the_functions_border_drags_in_full_diff() {
+    let mut a = fns_app();
+    key(&mut a, KeyCode::Char('d'));
+    tui::snapshot(&mut a, 180, 50);
+    let p = a.fns_pane;
+    drag_across(&mut a, p.y + 2, p.right() - 1, p.right() + 4);
+    assert_eq!(a.fns_pane.width, p.width + 5);
+}

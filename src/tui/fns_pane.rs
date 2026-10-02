@@ -7,10 +7,19 @@ use unicode_width::UnicodeWidthStr;
 use super::{DIM, FAINT, GREEN, SEL_BG, app::{App, Pane}, pane_block, trunc};
 use crate::{collect::outline::lang_for, map::CardKind};
 
-/// Columns the panel takes, borders included.
+/// Columns the panel takes by default, borders included.
 pub(super) const WIDTH: u16 = 32;
+/// Narrowest a drag can make the panel.
+const MIN_WIDTH: u16 = 16;
+/// Columns a drag must leave the diff.
+const MIN_DIFF_WIDTH: u16 = 40;
 /// Narrowest terminal that still shows the panel beside the diff.
 pub(super) const MIN_TERM_WIDTH: u16 = 130;
+
+/// The panel's width out of a `row` columns wide, clamped so the diff keeps `MIN_DIFF_WIDTH`.
+pub(super) fn width(want: Option<u16>, row: u16) -> u16 {
+    want.unwrap_or(WIDTH).clamp(MIN_WIDTH, row.saturating_sub(MIN_DIFF_WIDTH).max(MIN_WIDTH))
+}
 
 pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     let block = pane_block(Line::from(" functions "), app.focus == Pane::Functions);

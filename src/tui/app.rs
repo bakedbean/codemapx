@@ -74,15 +74,18 @@ pub struct App {
     pub show_fns: bool,
     /// The functions panel as last drawn (empty when hidden).
     pub fns_pane: Rect,
+    /// Functions panel width set by dragging its border; None uses the default.
+    pub fns_width: Option<u16>,
     /// The border being dragged, and the grab row's offset from it.
     pub drag: Option<(Divider, i32)>,
 }
 
-/// A draggable border: above the middle row, or above the diff.
+/// A draggable border: above the middle row, above the diff, or between the functions panel and the diff.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Divider {
     MapMid,
     MidDiff,
+    FnsDiff,
 }
 
 impl App {
@@ -108,6 +111,7 @@ impl App {
             col_overrides: vec![None; ncols],
             map_width: map_pane::FULL_WIDTH,
             heights: None,
+            fns_width: None,
             panes: [Rect::default(); 3],
             mid_panes: [Rect::default(); 3],
             show_fns: true,

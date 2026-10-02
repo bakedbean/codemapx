@@ -40,7 +40,7 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `c` | collapse or expand the column holding the selected card |
 | `C` | reset every column to the automatic layout |
 | `q` / `esc` | quit (`esc` first closes the full-screen diff) |
-| mouse drag | drag the border between two rows to resize them |
+| mouse drag | drag the border between two rows, or between the functions panel and the diff, to resize them |
 | mouse wheel | move the pane under the pointer: scroll the diff, or ↑/↓ in the map and middle panes (focus stays put) |
 
 `o` runs `$EDITOR +<line> <path>` (default `nvim`). For editors that take another form, set a template, e.g. `CODEMAPX_EDITOR='code -g {path}:{line}'`.
