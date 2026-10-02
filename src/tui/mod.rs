@@ -97,7 +97,11 @@ pub(crate) fn pane_block(title: Line<'static>, focused: bool) -> Block<'static> 
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
+    app.fns_pane = Rect::default();
     if area.width < map_pane::MIN_WIDTH {
+        if app.focus == Pane::Functions {
+            app.focus = Pane::Diff;
+        }
         f.render_widget(Paragraph::new(Span::styled("terminal too narrow (need 100)", Style::default().fg(DIM))), area);
         return;
     }
@@ -116,7 +120,6 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     .split(area);
     app.panes = [rows[2], rows[3], rows[4]];
     app.mid_panes = [Rect::default(); 3];
-    app.fns_pane = Rect::default();
     draw_header(f, app, rows[0]);
     if let Some(b) = &banner {
         f.render_widget(Paragraph::new(Span::styled(format!(" {b}"), Style::default().fg(AMBER).bold())), rows[1]);

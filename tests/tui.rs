@@ -472,3 +472,14 @@ fn functions_panel_explains_empty_lists() {
     a.select(i);
     assert!(tui::snapshot(&mut a, 180, 52).contains("re-run /codemapx"));
 }
+
+#[test]
+fn too_narrow_drops_the_functions_panel_and_its_focus() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    tui::snapshot(&mut a, 180, 52);
+    a.focus = Pane::Functions;
+    tui::snapshot(&mut a, 80, 52);
+    assert_eq!(a.fns_pane, ratatui::layout::Rect::default());
+    assert_eq!(a.focus, Pane::Diff);
+}
