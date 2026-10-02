@@ -20,12 +20,13 @@ pub fn hideable(name: &str) -> bool {
 }
 
 /// How each column renders at `width`; None when the map can't fit at all.
+/// Tests/docs start collapsed; `t` (show_hidden) expands them, swapping out the rest below FULL_WIDTH.
 pub fn column_layout(names: &[&str], width: u16, show_hidden: bool) -> Option<Vec<ColumnView>> {
     if width < MIN_WIDTH {
         return None;
     }
     let hideable: Vec<bool> = names.iter().map(|n| hideable(n)).collect();
-    if width >= FULL_WIDTH || !hideable.contains(&true) {
+    if !hideable.contains(&true) || (width >= FULL_WIDTH && show_hidden) {
         return Some(vec![ColumnView::Expanded; names.len()]);
     }
     Some(hideable.iter().map(|&h| if h != show_hidden { ColumnView::Collapsed } else { ColumnView::Expanded }).collect())

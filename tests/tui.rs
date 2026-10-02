@@ -110,9 +110,10 @@ fn link_panes_show_evidence() {
 }
 
 #[test]
-fn column_layout_collapses_tests_and_docs_below_170() {
+fn column_layout_starts_tests_and_docs_collapsed() {
     let names = ["Shared", "Apply", "Tests", "docs"];
-    assert_eq!(column_layout(&names, 180, false), Some(vec![Expanded; 4]));
+    assert_eq!(column_layout(&names, 180, false), Some(vec![Expanded, Expanded, Collapsed, Collapsed]));
+    assert_eq!(column_layout(&names, 180, true), Some(vec![Expanded; 4]));
     assert_eq!(column_layout(&names, 120, false), Some(vec![Expanded, Expanded, Collapsed, Collapsed]));
     assert_eq!(column_layout(&names, 120, true), Some(vec![Collapsed, Collapsed, Expanded, Expanded]));
     assert_eq!(column_layout(&["A", "B"], 120, false), Some(vec![Expanded; 2]));

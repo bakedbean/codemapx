@@ -35,7 +35,7 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `o` | open the editor at the diff line, outline entry, or link evidence |
 | `d` | full-screen diff |
 | `J` `K` | page the diff |
-| `t` | in narrow terminals, swap the collapsed Tests/Docs columns in |
+| `t` | expand the Tests/Docs columns, which start collapsed (in narrow terminals this collapses the others) |
 | `c` | collapse or expand the column holding the selected card |
 | `C` | reset every column to the automatic layout |
 | `q` / `esc` | quit (`esc` first closes the full-screen diff) |
