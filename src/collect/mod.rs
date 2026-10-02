@@ -39,13 +39,12 @@ pub fn collect(git: &Git, base: Option<&str>) -> Result<Facts, String> {
         {
             imps = imports::imports(&tree, src);
             if tree.root_node().has_error() {
-                warnings.push(format!("{}: parse failed, no outline", c.path));
-            } else {
-                let decls = outline::declarations(&tree, src);
-                items = outline::outline(&decls, &added_nums);
-                fns = outline::functions(&decls, &added_nums, &diff::deleted_at(&diff));
-                exports = outline::changed_exports(&decls, &added_nums);
+                warnings.push(format!("{}: parse errors, outline may be partial", c.path));
             }
+            let decls = outline::declarations(&tree, src);
+            items = outline::outline(&decls, &added_nums);
+            fns = outline::functions(&decls, &added_nums, &diff::deleted_at(&diff));
+            exports = outline::changed_exports(&decls, &added_nums);
         }
         infos.push(FileInfo {
             path: c.path.clone(),
