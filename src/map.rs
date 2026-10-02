@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::{
     annotations::{Annotations, ContextCard, Missing},
-    facts::{Candidate, Evidence, Facts, FileFacts, Status},
+    facts::{Candidate, Evidence, Facts, FileFacts, FunctionItem, Status},
     paths::split,
 };
 
@@ -57,6 +57,7 @@ pub struct Card {
     pub del: u32,
     pub diff: String,
     pub outline: Vec<MapOutline>,
+    pub functions: Vec<FunctionItem>,
     pub column: usize,
 }
 
@@ -281,6 +282,7 @@ fn changed_card(f: &FileFacts, ann: &Annotations, column: usize) -> Card {
                 note: note.outline.get(&o.name).cloned().unwrap_or_default(),
             })
             .collect(),
+        functions: f.functions.clone(),
         column,
     }
 }
@@ -300,6 +302,7 @@ fn context_card(c: &ContextCard, column: usize) -> Card {
         del: 0,
         diff: String::new(),
         outline: vec![],
+        functions: vec![],
         column,
     }
 }
@@ -318,6 +321,7 @@ fn missing_card(m: &Missing, column: usize) -> Card {
         del: 0,
         diff: String::new(),
         outline: vec![],
+        functions: vec![],
         column,
     }
 }
