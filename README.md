@@ -9,6 +9,8 @@ cargo install --path .
 ln -s "$PWD/skill/codemapx" ~/.claude/skills/codemapx
 ```
 
+`cargo install` puts the binary in `~/.cargo/bin`, so that directory must be on your `$PATH`. If `codemapx` isn't found, add `export PATH="$HOME/.cargo/bin:$PATH"` to your shell profile.
+
 ## Use
 
 1. When an agent finishes a branch, run `/codemapx` in its session. It runs `codemapx collect`, writes the annotations and validates them.
