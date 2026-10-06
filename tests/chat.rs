@@ -4,6 +4,8 @@ use std::path::Path;
 
 use codemapx::tui::chat::briefing::briefing;
 use codemapx::tui::chat::agent::{AgentKind, argv, ready};
+use codemapx::tui::chat::{keys::{encode_key, wrap_paste}, render::render_screen};
+use ratatui::{buffer::Buffer, crossterm::event::{KeyCode, KeyEvent, KeyModifiers}, layout::Rect, style::Color};
 
 #[test]
 fn briefing_covers_the_map_without_diffs() {
@@ -75,4 +77,53 @@ fn codex_is_ready_at_its_composer_not_its_trust_dialog() {
     let mut p = vt100::Parser::new(5, 40, 0);
     p.process("\r\n  › Ask Codex to do anything".as_bytes());
     assert!(ready(AgentKind::Codex, p.screen()));
+}
+
+fn enc(code: KeyCode, m: KeyModifiers) -> Vec<u8> {
+    encode_key(KeyEvent::new(code, m))
+}
+
+#[test]
+fn keys_encode_like_a_terminal() {
+    let none = KeyModifiers::NONE;
+    let cases: [(KeyCode, KeyModifiers, &[u8]); 16] = [
+        (KeyCode::Char('a'), none, b"a"),
+        (KeyCode::Char('é'), none, "é".as_bytes()),
+        (KeyCode::Char('c'), KeyModifiers::CONTROL, b"\x03"),
+        (KeyCode::Char('z'), KeyModifiers::CONTROL, b""),
+        (KeyCode::Char('d'), KeyModifiers::CONTROL, b""),
+        (KeyCode::Char('b'), KeyModifiers::ALT, b"\x1bb"),
+        (KeyCode::Enter, none, b"\r"),
+        (KeyCode::Backspace, none, b"\x7f"),
+        (KeyCode::Tab, none, b"\t"),
+        (KeyCode::BackTab, KeyModifiers::SHIFT, b"\x1b[Z"),
+        (KeyCode::Esc, none, b"\x1b"),
+        (KeyCode::Up, none, b"\x1b[A"),
+        (KeyCode::Home, none, b"\x1b[H"),
+        (KeyCode::PageDown, none, b"\x1b[6~"),
+        (KeyCode::Delete, none, b"\x1b[3~"),
+        (KeyCode::F(5), none, b""),
+    ];
+    for (code, m, want) in cases {
+        assert_eq!(enc(code, m), want, "{code:?} {m:?}");
+    }
+    assert_eq!(wrap_paste("a\nb"), b"\x1b[200~a\nb\x1b[201~");
+}
+
+fn render(bytes: &[u8]) -> Buffer {
+    let mut p = vt100::Parser::new(2, 10, 0);
+    p.process(bytes);
+    let mut buf = Buffer::empty(Rect::new(0, 0, 10, 2));
+    render_screen(p.screen(), &mut buf, Rect::new(0, 0, 10, 2));
+    buf
+}
+
+#[test]
+fn screens_render_text_wide_glyphs_and_color() {
+    let b = render(b"hello");
+    assert_eq!((0..5).map(|x| b[(x, 0)].symbol().to_string()).collect::<String>(), "hello");
+    assert_eq!(b[(7, 1)].symbol(), " ");
+    let b = render("世界".as_bytes());
+    assert_eq!([b[(0, 0)].symbol(), b[(1, 0)].symbol(), b[(2, 0)].symbol()], ["世", " ", "界"]);
+    assert_eq!(render(b"\x1b[31mX")[(0, 0)].fg, Color::Indexed(1));
 }
