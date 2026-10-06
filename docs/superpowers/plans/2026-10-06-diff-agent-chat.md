@@ -14,7 +14,7 @@
 
 - Never launch an agent in headless/print/SDK mode; always its interactive TUI.
 - Agent kinds: `claude` (default) and `codex`; `CODEMAPX_AGENT=claude|codex` picks, `CODEMAPX_AGENT_BIN` overrides the binary.
-- Read-only: claude gets `--permission-mode default --allowedTools Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"`; codex gets `-s read-only -a on-request`.
+- Read-only: claude gets `--permission-mode default --allowedTools Read Grep Glob` (no git pre-approval: `git diff --output` writes files); codex gets `-s read-only -a on-request`.
 - No session id / resume flags; nothing persisted.
 - `view --snapshot` and every test must never start a real agent.
 - Panel: `a` toggles, starts hidden, default width 40% of the row's room (row less the minimap, and less the functions panel's 16-column minimum when it is shown), minimum 40 columns, the minimap's width reserves the chat and functions minimums, diff keeps `MIN_DIFF_WIDTH` (40).

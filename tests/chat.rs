@@ -49,7 +49,7 @@ fn agent_kind_comes_from_the_env() {
 fn claude_argv_is_read_only_with_the_briefing() {
     assert_eq!(
         argv(AgentKind::Claude, None, "brief"),
-        ["claude", "--permission-mode", "default", "--allowedTools", "Read", "Grep", "Glob", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)", "--append-system-prompt", "brief"]
+        ["claude", "--permission-mode", "default", "--allowedTools", "Read", "Grep", "Glob", "--append-system-prompt", "brief"]
     );
     assert_eq!(argv(AgentKind::Claude, Some("/opt/claude"), "b")[0], "/opt/claude");
     assert_eq!(argv(AgentKind::Claude, Some(""), "b")[0], "claude");

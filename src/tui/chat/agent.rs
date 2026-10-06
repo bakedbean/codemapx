@@ -6,8 +6,8 @@ pub enum AgentKind {
     Codex,
 }
 
-/// Pre-approved claude tools: reading and read-only git.
-const CLAUDE_TOOLS: [&str; 6] = ["Read", "Grep", "Glob", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)"];
+/// Pre-approved claude tools: file reads only. Git prompts too: `git diff --output=<path>` writes files.
+const CLAUDE_TOOLS: [&str; 3] = ["Read", "Grep", "Glob"];
 
 impl AgentKind {
     /// `CODEMAPX_AGENT`'s value; unset or blank is claude.

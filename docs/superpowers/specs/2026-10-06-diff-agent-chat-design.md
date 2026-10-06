@@ -26,7 +26,7 @@ Done when:
 | Session life | Started the first time the panel opens, kept while hidden, killed on quit. Nothing persisted; no resume flags. |
 | Seeding | A briefing built from the merged `Map`, passed as launch instructions. |
 | File context | On focusing the panel, codemapx types a `path:start-end ` reference into the agent's composer without Enter. |
-| Permissions | Read-only: reads, search and read-only git are pre-approved; anything else prompts in the pane. |
+| Permissions | Read-only: file reads and search are pre-approved; git and anything else prompt in the pane. |
 | PTY stack | `portable-pty` 0.9 and `fnug-vt100` 0.15.2 (imported as `vt100`), matching wsx. Renderer and key encoder lifted from wsx. No tokio. |
 
 ## Layout and keys
@@ -78,7 +78,7 @@ area.
 | | claude | codex |
 |---|---|---|
 | Instructions | `--append-system-prompt <briefing>` | `-c developer_instructions=<briefing as TOML basic string>` |
-| Read-only | `--permission-mode default --allowedTools Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"` | `-s read-only -a on-request` |
+| Read-only | `--permission-mode default --allowedTools Read Grep Glob` (git prompts: its options can write files) | `-s read-only -a on-request` |
 | Composer ready | alternate screen is active and a `❯` row sits under a `─` rule | a row starting with `›` and the cursor visible |
 | Insert | bracketed paste, no CR | bracketed paste, no CR |
 
