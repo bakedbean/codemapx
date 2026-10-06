@@ -99,9 +99,10 @@ impl Chat {
             return;
         }
         let r = r.clone();
-        s.write(&keys::wrap_paste(&r));
-        self.last_ref = Some(r);
-        self.queued = None;
+        if s.write(&keys::wrap_paste(&r)) {
+            self.last_ref = Some(r);
+            self.queued = None;
+        }
     }
 
     /// True when the agent produced output since the last call.

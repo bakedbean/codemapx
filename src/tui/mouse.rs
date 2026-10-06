@@ -142,7 +142,9 @@ fn wheel_chat(app: &mut App, ev: MouseEvent, d: isize) {
     let c = app.chat_pane;
     let Some(s) = app.chat.as_mut().and_then(|c| c.session.as_mut()) else { return };
     match s.wheel_bytes(d < 0, ev.column - c.x, ev.row - c.y) {
-        Some(b) => s.write(&b),
+        Some(b) => {
+            s.write(&b);
+        }
         None => s.scroll_by(-d * WHEEL_LINES),
     }
 }

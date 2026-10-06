@@ -63,17 +63,15 @@ impl Session {
         Ok(Session { parser, master: pair.master, writer, killer, exit, last_output, started: Instant::now(), size: (rows, cols) })
     }
 
-    pub fn write(&mut self, bytes: &[u8]) {
-        if !bytes.is_empty() {
-            let _ = self.writer.write_all(bytes).and_then(|_| self.writer.flush());
-        }
+    /// False when the PTY refused the bytes (the agent is gone or wedged).
+    pub fn write(&mut self, bytes: &[u8]) -> bool {
+        bytes.is_empty() || self.writer.write_all(bytes).and_then(|_| self.writer.flush()).is_ok()
     }
 
-    /// No-op unless the size changed, since drawing calls it every frame.
+    /// No-op unless the size changed, since drawing calls it every frame; a failed resize is retried next frame.
     pub fn resize(&mut self, rows: u16, cols: u16) {
-        if (rows, cols) != self.size {
+        if (rows, cols) != self.size && self.master.resize(pty_size(rows, cols)).is_ok() {
             self.size = (rows, cols);
-            let _ = self.master.resize(pty_size(rows, cols));
             self.parser.lock().unwrap().set_size(rows, cols);
         }
     }
