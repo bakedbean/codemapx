@@ -93,7 +93,7 @@ pub(crate) fn pane_block(title: Line<'static>, focused: bool) -> Block<'static> 
     Block::default()
         .borders(Borders::ALL)
         .border_type(if focused { BorderType::Thick } else { BorderType::Rounded })
-        .border_style(Style::default().fg(if focused { Color::White } else { FAINT }))
+        .border_style(Style::default().fg(if focused { Color::White } else { DIM }))
         .title(title)
 }
 
