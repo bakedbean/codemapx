@@ -33,7 +33,7 @@ pub fn argv(kind: AgentKind, bin: Option<&str>, briefing: &str) -> Vec<String> {
     let mut v = vec![bin.to_string()];
     match kind {
         AgentKind::Claude => {
-            v.push("--allowedTools".into());
+            v.extend(["--permission-mode", "default", "--allowedTools"].map(String::from));
             v.extend(CLAUDE_TOOLS.map(String::from));
             v.extend(["--append-system-prompt".into(), briefing.into()]);
         }
@@ -63,11 +63,15 @@ fn toml_string(s: &str) -> String {
     out
 }
 
-/// Claude's composer is up once it switches to the alternate screen; codex's is a `›` row with the cursor
-/// visible (its trust dialog marks rows with `›` too, but hides the cursor).
+/// Claude's composer is up on the alternate screen as a `❯` row under a `─` rule (its trust dialog has `❯` rows
+/// but no rule above them); codex's is a `›` row with the cursor visible (its trust dialog hides the cursor).
 pub fn ready(kind: AgentKind, screen: &vt100::Screen) -> bool {
     match kind {
-        AgentKind::Claude => screen.alternate_screen(),
+        AgentKind::Claude => {
+            let (rows, cols) = screen.size();
+            let row = |r| screen.contents_between(r, 0, r, cols);
+            screen.alternate_screen() && (1..rows).any(|r| row(r).trim_start().starts_with('❯') && row(r - 1).trim_start().starts_with('─'))
+        }
         AgentKind::Codex => {
             let (rows, cols) = screen.size();
             !screen.hide_cursor() && (0..rows).any(|r| screen.contents_between(r, 0, r, cols).trim_start().starts_with('›'))
