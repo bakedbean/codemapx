@@ -15,6 +15,13 @@ pub enum Action {
 }
 
 pub fn handle(app: &mut App, key: KeyEvent) -> Action {
+    let prev = app.focus;
+    let action = dispatch(app, key);
+    app.note_focus(prev);
+    action
+}
+
+fn dispatch(app: &mut App, key: KeyEvent) -> Action {
     app.flash = None;
     if app.focus == Pane::Chat {
         if let Some(a) = chat_key(app, key) {

@@ -15,6 +15,12 @@ use super::{
 const WHEEL_LINES: isize = 3;
 
 pub fn handle(app: &mut App, ev: MouseEvent) {
+    let prev = app.focus;
+    dispatch(app, ev);
+    app.note_focus(prev);
+}
+
+fn dispatch(app: &mut App, ev: MouseEvent) {
     match ev.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             app.drag = grab(app, ev.column, ev.row);

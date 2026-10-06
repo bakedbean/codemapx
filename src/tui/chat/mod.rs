@@ -6,7 +6,7 @@ pub mod keys;
 pub mod pty;
 pub mod render;
 
-use std::{path::Path, sync::mpsc, time::Instant};
+use std::{path::Path, sync::mpsc, time::{Duration, Instant}};
 
 use ratatui::{
     prelude::*,
@@ -14,8 +14,12 @@ use ratatui::{
 };
 
 use super::{DIM, app::{App, Pane}, fns_pane::{self, MIN_DIFF_WIDTH}, pane_block};
+use crate::{facts::Status, map::CardKind};
 use agent::AgentKind;
 use pty::Session;
+
+/// How long a reference waits for the agent's composer before it is dropped.
+const PREFILL_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Narrowest the panel gets, borders included.
 const MIN_WIDTH: u16 = 40;
@@ -74,6 +78,30 @@ impl Chat {
         }
     }
 
+    /// Keeps only the newest reference, and none that was just typed.
+    pub fn queue(&mut self, r: String, now: Instant) {
+        if self.last_ref.as_deref() != Some(r.as_str()) {
+            self.queued = Some((r, now));
+        }
+    }
+
+    /// Types the queued reference, without Enter, once the agent is settled and its composer is up.
+    pub fn tick(&mut self, now: Instant) {
+        let Some((r, at)) = &self.queued else { return };
+        if now.duration_since(*at) > PREFILL_TIMEOUT {
+            self.queued = None;
+            return;
+        }
+        let Some(s) = &mut self.session else { return };
+        if !(s.settled(now) && agent::ready(self.kind, s.parser().screen())) {
+            return;
+        }
+        let r = r.clone();
+        s.write(&keys::wrap_paste(&r));
+        self.last_ref = Some(r);
+        self.queued = None;
+    }
+
     /// True when the agent produced output since the last call.
     pub fn drain_wake(&self) -> bool {
         self.wake.try_iter().count() > 0
@@ -109,4 +137,30 @@ pub(crate) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         let (r, c) = screen.cursor_position();
         f.set_cursor_position((inner.x + c, inner.y + r));
     }
+}
+
+/// `path:start-end ` for what the reviewer was on in `from`, the pane focus came from: its function or outline entry,
+/// else the highlighted diff line, else the visible lines. None when there's no file at HEAD to point at.
+pub fn reference(app: &App, from: Pane) -> Option<String> {
+    let c = app.card();
+    if c.kind == CardKind::Missing || c.binary || c.status == Some(Status::Deleted) {
+        return None;
+    }
+    let path = c.path.as_deref()?;
+    let picked = match from {
+        Pane::Functions => app.fns.selected().map(|s| (c.functions[s].start, c.functions[s].end)),
+        Pane::Inside => app.inside.selected().map(|s| (c.outline[s].start, c.outline[s].end)),
+        _ => None,
+    };
+    let range = picked.or_else(|| app.hl.and_then(|h| app.lines.get(h)?.n).map(|n| (n, n))).or_else(|| {
+        let rows = app.panes[2].height.saturating_sub(2).max(1) as usize;
+        let mut ns = app.lines.iter().skip(app.scroll).take(rows).filter_map(|l| l.n);
+        let first = ns.next()?;
+        Some((first, ns.last().unwrap_or(first)))
+    });
+    Some(match range {
+        Some((a, b)) if a == b => format!("{path}:{a} "),
+        Some((a, b)) => format!("{path}:{a}-{b} "),
+        None => format!("{path} "),
+    })
 }

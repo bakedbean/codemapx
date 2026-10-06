@@ -4,6 +4,7 @@ use std::{path::{Path, PathBuf}, sync::mpsc, time::{Duration, Instant}};
 
 use codemapx::tui::{self, App, Pane, keys::{self, Action}};
 use codemapx::tui::chat::briefing::briefing;
+use codemapx::tui::chat::reference;
 use codemapx::tui::chat::pty::{Session, settled};
 use codemapx::tui::chat::agent::{AgentKind, argv, ready};
 use codemapx::tui::chat::{keys::{encode_key, wrap_paste}, render::render_screen};
@@ -337,4 +338,89 @@ fn the_wheel_over_an_empty_chat_leaves_the_diff_alone() {
     let c = a.chat_pane;
     mouse_at(&mut a, MouseEventKind::ScrollDown, c.x + 5, c.y + 3);
     assert_eq!(a.scroll, 0);
+}
+
+fn at(a: &mut App, id: &str) {
+    let i = a.map.card_index(id).unwrap();
+    a.select(i);
+}
+
+#[test]
+fn references_follow_the_pane_focus_came_from() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    tui::snapshot(&mut a, 180, 50);
+    let f = &a.card().functions[0];
+    assert_eq!(reference(&a, Pane::Functions), Some(format!("src/billing/mills.ts:{}-{} ", f.start, f.end)));
+    at(&mut a, "src/billing/apply.ts");
+    let o = &a.card().outline[0];
+    assert_eq!(reference(&a, Pane::Inside), Some(format!("src/billing/apply.ts:{}-{} ", o.start, o.end)));
+    a.jump_to_line(4);
+    assert_eq!(reference(&a, Pane::Diff), Some("src/billing/apply.ts:4 ".into()));
+    a.hl = None;
+    a.scroll = 0;
+    let r = reference(&a, Pane::Map).unwrap();
+    assert!(r.starts_with("src/billing/apply.ts:1-"), "{r}");
+}
+
+#[test]
+fn no_reference_for_missing_or_deleted_files() {
+    let mut a = app();
+    at(&mut a, "enqueue");
+    assert_eq!(reference(&a, Pane::Diff), None);
+    at(&mut a, "src/api/legacy.ts");
+    assert_eq!(reference(&a, Pane::Diff), None);
+}
+
+#[test]
+fn focusing_the_chat_queues_a_new_reference_once() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    tui::snapshot(&mut a, 180, 50);
+    a.focus = Pane::Diff;
+    press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE);
+    tui::snapshot(&mut a, 180, 50);
+    let queued = a.chat.as_ref().unwrap().queued.clone().map(|(r, _)| r);
+    assert!(queued.as_deref().is_some_and(|r| r.starts_with("src/billing/apply.ts:1-")), "{queued:?}");
+    // Already typed: refocusing on the same lines queues nothing.
+    let chat = a.chat.as_mut().unwrap();
+    chat.last_ref = queued;
+    chat.queued = None;
+    press(&mut a, KeyCode::Char('x'), KeyModifiers::CONTROL);
+    press(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    assert_eq!(a.focus, Pane::Chat);
+    assert!(a.chat.as_ref().unwrap().queued.is_none());
+}
+
+#[test]
+fn a_queued_reference_is_typed_once_the_composer_is_up() {
+    let mut chat = codemapx::tui::chat::Chat::new(AgentKind::Claude);
+    chat.start(&sh("printf '\\033[?1049h'; exec cat"), Path::new("/"), 5, 40);
+    chat.queue("src/a.ts:1-2 ".into(), Instant::now());
+    let end = Instant::now() + Duration::from_secs(5);
+    while chat.queued.is_some() && Instant::now() < end {
+        chat.tick(Instant::now());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(chat.queued.is_none());
+    assert_eq!(chat.last_ref.as_deref(), Some("src/a.ts:1-2 "));
+    let s = chat.session.as_ref().unwrap();
+    let mut seen = false;
+    for _ in 0..40 {
+        seen = s.parser().screen().contents().contains("src/a.ts:1-2");
+        if seen {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(seen, "echoed by the tty");
+}
+
+#[test]
+fn a_stale_reference_is_dropped() {
+    let mut chat = codemapx::tui::chat::Chat::new(AgentKind::Claude);
+    chat.queue("src/a.ts ".into(), Instant::now() - Duration::from_secs(11));
+    chat.tick(Instant::now());
+    assert!(chat.queued.is_none());
+    assert!(chat.last_ref.is_none());
 }

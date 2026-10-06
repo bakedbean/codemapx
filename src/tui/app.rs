@@ -1,10 +1,10 @@
 //! TUI state and navigation over a merged `Map`.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Instant};
 
 use ratatui::{layout::Rect, widgets::ListState};
 
-use super::chat::{Chat, agent::AgentKind};
+use super::chat::{self, Chat, agent::AgentKind};
 use super::map_pane::{self, ColumnView};
 use crate::{
     diff::{hunk_first, hunk_start},
@@ -334,6 +334,17 @@ impl App {
         self.show_fns = !self.show_fns;
         if !self.show_fns && self.focus == Pane::Functions {
             self.focus = Pane::Diff;
+        }
+    }
+
+    /// Queues a reference for the chat when focus just moved into it from `prev`.
+    pub fn note_focus(&mut self, prev: Pane) {
+        if prev == Pane::Chat || self.focus != Pane::Chat {
+            return;
+        }
+        let Some(r) = chat::reference(self, prev) else { return };
+        if let Some(c) = self.chat.as_mut() {
+            c.queue(r, Instant::now());
         }
     }
 
