@@ -275,6 +275,8 @@ fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<
                 // Draw first so the panel's size is known.
                 term.draw(|f| draw(f, app))?;
                 chat::start(app);
+                // A fast agent can exit before any pass sees it live; arm the exit redraw now.
+                was_live = app.chat.as_ref().is_some_and(|c| c.session.is_some());
             }
             Action::Open(path, line) => {
                 restore();
