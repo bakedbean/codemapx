@@ -3,4 +3,5 @@
 pub mod agent;
 pub mod briefing;
 pub mod keys;
+pub mod pty;
 pub mod render;

@@ -1,8 +1,9 @@
 mod common;
 
-use std::path::Path;
+use std::{path::Path, sync::mpsc, time::{Duration, Instant}};
 
 use codemapx::tui::chat::briefing::briefing;
+use codemapx::tui::chat::pty::{Session, settled};
 use codemapx::tui::chat::agent::{AgentKind, argv, ready};
 use codemapx::tui::chat::{keys::{encode_key, wrap_paste}, render::render_screen};
 use ratatui::{buffer::Buffer, crossterm::event::{KeyCode, KeyEvent, KeyModifiers}, layout::Rect, style::Color};
@@ -126,4 +127,67 @@ fn screens_render_text_wide_glyphs_and_color() {
     let b = render("世界".as_bytes());
     assert_eq!([b[(0, 0)].symbol(), b[(1, 0)].symbol(), b[(2, 0)].symbol()], ["世", " ", "界"]);
     assert_eq!(render(b"\x1b[31mX")[(0, 0)].fg, Color::Indexed(1));
+}
+
+fn sh(script: &str) -> Vec<String> {
+    vec!["/bin/sh".into(), "-c".into(), script.into()]
+}
+
+/// Polls `done` until it holds or `secs` pass, sleeping on the wake channel in between.
+fn wait_for(rx: &mpsc::Receiver<()>, secs: u64, mut done: impl FnMut() -> bool) -> bool {
+    let end = Instant::now() + Duration::from_secs(secs);
+    while Instant::now() < end {
+        if done() {
+            return true;
+        }
+        let _ = rx.recv_timeout(Duration::from_millis(50));
+    }
+    done()
+}
+
+#[test]
+fn a_session_shows_output_and_resizes() {
+    let (tx, rx) = mpsc::channel();
+    let mut s = Session::spawn(&sh("printf hi; sleep 2"), Path::new("/"), 5, 20, tx).unwrap();
+    assert!(wait_for(&rx, 3, || s.parser().screen().contents().contains("hi")));
+    s.resize(10, 40);
+    assert_eq!(s.parser().screen().size(), (10, 40));
+    assert_eq!(s.exit_code(), None);
+}
+
+#[test]
+fn exit_is_observed() {
+    let (tx, rx) = mpsc::channel();
+    let s = Session::spawn(&sh("exit 3"), Path::new("/"), 5, 20, tx).unwrap();
+    assert!(wait_for(&rx, 3, || s.exit_code().is_some()));
+    assert_eq!(s.exit_code(), Some(3));
+}
+
+#[test]
+fn missing_binary_is_an_error() {
+    let (tx, _rx) = mpsc::channel();
+    let e = Session::spawn(&["/nope/agent".to_string()], Path::new("/"), 5, 20, tx).err().unwrap();
+    assert!(e.starts_with("can't run /nope/agent: "), "{e}");
+}
+
+#[test]
+fn settled_needs_age_quiet_and_some_output() {
+    let t0 = Instant::now();
+    let ms = |n| t0 + Duration::from_millis(n);
+    assert!(!settled(t0, None, ms(5000)), "no output yet");
+    assert!(!settled(t0, Some(ms(100)), ms(1000)), "too young");
+    assert!(!settled(t0, Some(ms(1400)), ms(1600)), "not quiet");
+    assert!(settled(t0, Some(ms(1100)), ms(1600)));
+}
+
+#[test]
+fn wheel_reports_only_when_the_program_asks_for_mouse() {
+    let (tx, rx) = mpsc::channel();
+    let s = Session::spawn(&sh("printf '\\033[?1000h\\033[?1006hm'; sleep 2"), Path::new("/"), 5, 20, tx).unwrap();
+    assert!(wait_for(&rx, 3, || s.parser().screen().contents().contains('m')));
+    assert_eq!(s.wheel_bytes(true, 3, 2), Some(b"\x1b[<64;3;2M".to_vec()));
+    let (tx, rx) = mpsc::channel();
+    let s = Session::spawn(&sh("printf x; sleep 2"), Path::new("/"), 5, 20, tx).unwrap();
+    assert!(wait_for(&rx, 3, || s.parser().screen().contents().contains('x')));
+    assert_eq!(s.wheel_bytes(true, 3, 2), None);
 }
