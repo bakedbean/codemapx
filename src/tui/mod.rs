@@ -236,6 +236,8 @@ fn restore() {
 /// Blocks on input until an agent is running; then polls every 16 ms and redraws only on input or agent output.
 fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<()> {
     let mut dirty = true;
+    // Whether the last pass saw a live agent, so the pass after it exits draws the exit before input blocks.
+    let mut was_live = false;
     loop {
         if dirty {
             term.draw(|f| draw(f, app))?;
@@ -246,11 +248,14 @@ fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<
         if let Some(c) = app.chat.as_mut().filter(|c| c.live()) {
             c.tick(Instant::now(), focused);
             let woke = c.drain_wake();
+            was_live = true;
             if !event::poll(Duration::from_millis(16))? {
-                // An exit also wakes, and the next draw shows it; after that the loop blocks again.
-                dirty = (woke && shown) || !c.live();
+                dirty = woke && shown;
                 continue;
             }
+        } else if was_live {
+            was_live = false;
+            continue;
         }
         let key = match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => key,
