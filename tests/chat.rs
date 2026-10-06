@@ -4,7 +4,7 @@ use std::{path::{Path, PathBuf}, sync::mpsc, time::{Duration, Instant}};
 
 use codemapx::tui::{self, App, Pane, keys::{self, Action}};
 use codemapx::tui::chat::briefing::briefing;
-use codemapx::tui::chat::reference;
+use codemapx::tui::chat::{Chat, reference};
 use codemapx::tui::chat::pty::{Session, settled};
 use codemapx::tui::chat::agent::{AgentKind, argv, ready};
 use codemapx::tui::chat::{keys::{encode_key, wrap_paste}, render::render_screen};
@@ -423,4 +423,14 @@ fn a_stale_reference_is_dropped() {
     chat.tick(Instant::now());
     assert!(chat.queued.is_none());
     assert!(chat.last_ref.is_none());
+}
+
+#[test]
+fn queueing_the_last_typed_ref_drops_a_pending_one() {
+    let now = std::time::Instant::now();
+    let mut chat = Chat::new(AgentKind::Claude);
+    chat.last_ref = Some("x".into());
+    chat.queue("y".into(), now);
+    chat.queue("x".into(), now);
+    assert!(chat.queued.is_none());
 }

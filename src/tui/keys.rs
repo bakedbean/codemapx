@@ -14,6 +14,15 @@ pub enum Action {
     StartChat,
 }
 
+/// A bracketed paste goes to a live agent in the focused chat; elsewhere it is ignored.
+pub fn paste(app: &mut App, s: &str) {
+    if app.focus == Pane::Chat
+        && let Some(c) = app.chat.as_mut().filter(|c| c.live())
+    {
+        c.write(&chat::keys::wrap_paste(s));
+    }
+}
+
 pub fn handle(app: &mut App, key: KeyEvent) -> Action {
     let prev = app.focus;
     let action = dispatch(app, key);
@@ -23,10 +32,10 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
 
 fn dispatch(app: &mut App, key: KeyEvent) -> Action {
     app.flash = None;
-    if app.focus == Pane::Chat {
-        if let Some(a) = chat_key(app, key) {
-            return a;
-        }
+    if app.focus == Pane::Chat
+        && let Some(a) = chat_key(app, key)
+    {
+        return a;
     }
     match key.code {
         KeyCode::Char('q') => return Action::Quit,
@@ -50,11 +59,8 @@ fn dispatch(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('d') => app.diff_full = !app.diff_full,
         KeyCode::Char('f') => app.toggle_fns(),
         KeyCode::Char('m') => app.show_minimap = !app.show_minimap,
-        KeyCode::Char('a') => {
-            if app.toggle_chat() {
-                return Action::StartChat;
-            }
-        }
+        KeyCode::Char('a') if app.toggle_chat() => return Action::StartChat,
+        KeyCode::Char('a') => {}
         KeyCode::Char('o') => match app.editor_target() {
             Some((path, line)) => return Action::Open(path, line),
             None => app.flash = Some(" Nothing to open here.".into()),

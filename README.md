@@ -38,15 +38,19 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `d` | full-screen diff (the diff pane always shows the whole file, with the changes in place) |
 | `m` | show or hide the minimap right of the diff: the whole file shrunk to fit, added lines green, deleted lines red, the visible part shaded; click it to jump there |
 | `f` | show or hide the functions panel left of the diff: a TS/JS file's top-level functions (including consts holding one), classes and their methods, `+` on those this branch added or deleted lines inside; moving in it jumps the diff to that function |
+| `a` | show or hide the agent chat between the diff and the minimap: claude (or codex) running in its own TUI, read-only, briefed on the branch's map; focusing it types a `path:start-end` reference for the lines you were on |
+| `ctrl-x` | in the chat, return focus to the diff (every other key goes to the agent) |
 | `J` `K` | page the diff |
 | `t` | expand the Tests/Docs columns, which start collapsed (in narrow terminals this collapses the others) |
 | `c` | collapse or expand the column holding the selected card |
 | `C` | reset every column to the automatic layout |
 | `q` / `esc` | quit (`esc` first closes the full-screen diff) |
-| mouse drag | drag the border between two rows, or between the diff and the functions panel or minimap, to resize them |
+| mouse drag | drag the border between two rows, or between the diff and the functions panel, chat or minimap, to resize them |
 | mouse wheel | move the pane under the pointer: scroll the diff (also over the minimap), or ↑/↓ in the map and middle panes (focus stays put) |
 
 `o` runs `$EDITOR +<line> <path>` (default `nvim`). For editors that take another form, set a template, e.g. `CODEMAPX_EDITOR='code -g {path}:{line}'`.
+
+The chat runs `claude` by default; `CODEMAPX_AGENT=codex` runs codex instead, and `CODEMAPX_AGENT_BIN` points at another binary. The agent starts the first time you press `a`, lives until codemapx quits, and keeps nothing afterwards.
 
 The TUI captures the mouse for border drags and wheel scrolling; most terminals still select text with shift-drag (option-drag in iTerm2 and Terminal.app).
 

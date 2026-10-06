@@ -134,6 +134,7 @@ fn cmd_view(path: Option<PathBuf>, snapshot: &[String], width: u16, height: u16)
         }
     };
     let mut app = tui::App::new(map, git.root().to_path_buf());
+    app.map_dir = Some(loaded.dir.clone());
     let head = git.head().unwrap_or_default();
     if loaded.facts.head != head {
         app.behind = Some(git.count_between(&loaded.facts.head, &head).unwrap_or(0));

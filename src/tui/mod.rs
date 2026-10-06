@@ -10,12 +10,12 @@ pub mod map_pane;
 mod minimap;
 pub mod mouse;
 
-use std::{env, io, path::Path, process::Command};
+use std::{env, io, path::Path, process::Command, time::{Duration, Instant}};
 
 use ratatui::{
     backend::TestBackend,
     crossterm::{
-        event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind},
+        event::{self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event, KeyEventKind},
         execute,
     },
     prelude::*,
@@ -220,31 +220,54 @@ pub fn run(app: &mut App) -> io::Result<()> {
     res
 }
 
-/// Mouse capture is for border drags and wheel-scrolling the panes; terminals still select text with shift/option-drag.
+/// Mouse capture is for border drags and wheel-scrolling the panes; terminals still select text with shift/option-drag. Bracketed paste lets a paste reach the chat agent whole.
 fn init() -> io::Result<ratatui::DefaultTerminal> {
     let term = ratatui::init();
-    execute!(io::stdout(), EnableMouseCapture)?;
+    execute!(io::stdout(), EnableMouseCapture, EnableBracketedPaste)?;
     Ok(term)
 }
 
 fn restore() {
-    let _ = execute!(io::stdout(), DisableMouseCapture);
+    let _ = execute!(io::stdout(), DisableBracketedPaste, DisableMouseCapture);
     ratatui::restore();
 }
 
+/// Blocks on input until an agent is running; then polls every 16 ms and redraws only on input or agent output.
 fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<()> {
+    let mut dirty = true;
     loop {
-        term.draw(|f| draw(f, app))?;
+        if dirty {
+            term.draw(|f| draw(f, app))?;
+        }
+        dirty = true;
+        if let Some(c) = app.chat.as_mut().filter(|c| c.live()) {
+            c.tick(Instant::now());
+            let woke = c.drain_wake();
+            if !event::poll(Duration::from_millis(16))? {
+                // An exit also wakes, and the next draw shows it; after that the loop blocks again.
+                dirty = woke || !c.live();
+                continue;
+            }
+        }
         let key = match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => key,
             Event::Mouse(m) => {
                 mouse::handle(app, m);
                 continue;
             }
+            Event::Paste(s) => {
+                keys::paste(app, &s);
+                continue;
+            }
             _ => continue,
         };
         match keys::handle(app, key) {
             Action::Quit => return Ok(()),
+            Action::StartChat => {
+                // Draw first so the panel's size is known.
+                term.draw(|f| draw(f, app))?;
+                chat::start(app);
+            }
             Action::Open(path, line) => {
                 restore();
                 let (t, e) = (env::var("CODEMAPX_EDITOR").ok(), env::var("EDITOR").ok());
@@ -255,7 +278,6 @@ fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<
                     app.flash = Some(format!(" {e}"));
                 }
             }
-            Action::StartChat => {}
             Action::None => {}
         }
     }

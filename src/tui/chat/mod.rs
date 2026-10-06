@@ -6,7 +6,7 @@ pub mod keys;
 pub mod pty;
 pub mod render;
 
-use std::{path::Path, sync::mpsc, time::{Duration, Instant}};
+use std::{env, path::Path, sync::mpsc, time::{Duration, Instant}};
 
 use ratatui::{
     prelude::*,
@@ -80,7 +80,9 @@ impl Chat {
 
     /// Keeps only the newest reference, and none that was just typed.
     pub fn queue(&mut self, r: String, now: Instant) {
-        if self.last_ref.as_deref() != Some(r.as_str()) {
+        if self.last_ref.as_deref() == Some(r.as_str()) {
+            self.queued = None;
+        } else {
             self.queued = Some((r, now));
         }
     }
@@ -156,11 +158,27 @@ pub fn reference(app: &App, from: Pane) -> Option<String> {
         let rows = app.panes[2].height.saturating_sub(2).max(1) as usize;
         let mut ns = app.lines.iter().skip(app.scroll).take(rows).filter_map(|l| l.n);
         let first = ns.next()?;
-        Some((first, ns.last().unwrap_or(first)))
+        Some((first, ns.next_back().unwrap_or(first)))
     });
     Some(match range {
         Some((a, b)) if a == b => format!("{path}:{a} "),
         Some((a, b)) => format!("{path}:{a}-{b} "),
         None => format!("{path} "),
     })
+}
+
+/// Starts the agent sized to the panel as last drawn, briefed on the map; CODEMAPX_AGENT picks it, CODEMAPX_AGENT_BIN its binary.
+pub fn start(app: &mut App) {
+    let inner = app.chat_pane.inner(Margin::new(1, 1));
+    let brief = briefing::briefing(&app.map, app.map_dir.as_deref());
+    let chat = app.chat.get_or_insert_with(|| Chat::new(AgentKind::Claude));
+    match AgentKind::from_env(env::var("CODEMAPX_AGENT").ok().as_deref()) {
+        Ok(k) => chat.kind = k,
+        Err(e) => {
+            chat.error = Some(e);
+            return;
+        }
+    }
+    let argv = agent::argv(chat.kind, env::var("CODEMAPX_AGENT_BIN").ok().as_deref(), &brief);
+    chat.start(&argv, &app.root, inner.height.max(1), inner.width.max(1));
 }
