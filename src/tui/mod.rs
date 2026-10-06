@@ -1,6 +1,7 @@
 //! Terminal view of a merged map.
 
 pub mod app;
+pub mod chat;
 mod diff_pane;
 mod fns_pane;
 pub mod keys;
