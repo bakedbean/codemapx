@@ -87,7 +87,8 @@ impl Chat {
         self.queued = if self.last_ref.as_deref() == Some(r.as_str()) { None } else { Some(r) };
     }
 
-    /// Types the queued reference, without Enter, once the agent is settled and its composer is up; leaving the chat drops it.
+    /// Types the queued reference, without Enter, once the agent is settled and its composer is up, swapping out the
+    /// last one if it is all the box holds; text the reviewer typed is left alone. Leaving the chat drops it.
     pub fn tick(&mut self, now: Instant, focused: bool) {
         if !focused {
             self.queued = None;
@@ -98,10 +99,15 @@ impl Chat {
         if !(s.settled(now) && agent::ready(self.kind, s.parser().screen())) {
             return;
         }
+        let Some(c) = agent::composer(self.kind, s.parser().screen()) else { return };
         let r = r.clone();
-        if s.write(&keys::wrap_paste(&r)) {
-            self.last_ref = Some(r);
-            self.queued = None;
+        match prefill_bytes(&c, self.last_ref.as_deref(), &r) {
+            Some(b) if s.write(&b) => {
+                self.last_ref = Some(r);
+                self.queued = None;
+            }
+            Some(_) => {}
+            None => self.queued = None,
         }
     }
 
@@ -109,6 +115,18 @@ impl Chat {
     pub fn drain_wake(&self) -> bool {
         self.wake.try_iter().count() > 0
     }
+}
+
+/// What puts `new` in the input box: typed into an empty box, or replacing `last` when the box holds just that
+/// (backspaced away, one per character). None when the box holds text codemapx didn't type, which stays untouched.
+pub fn prefill_bytes(c: &agent::Composer, last: Option<&str>, new: &str) -> Option<Vec<u8>> {
+    let mut out = match last {
+        _ if c.empty => vec![],
+        Some(l) if c.text == l.trim() => vec![0x7f; l.chars().count()],
+        _ => return None,
+    };
+    out.extend(keys::wrap_paste(new));
+    Some(out)
 }
 
 pub(crate) fn draw(f: &mut Frame, app: &mut App, area: Rect) {

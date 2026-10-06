@@ -6,7 +6,8 @@ use codemapx::tui::{self, App, Pane, keys::{self, Action}};
 use codemapx::tui::chat::briefing::briefing;
 use codemapx::tui::chat::{Chat, reference};
 use codemapx::tui::chat::pty::{Session, settled};
-use codemapx::tui::chat::agent::{AgentKind, argv, ready};
+use codemapx::tui::chat::agent::{AgentKind, Composer, argv, composer, ready};
+use codemapx::tui::chat::prefill_bytes;
 use codemapx::tui::chat::{keys::{encode_key, wrap_paste}, render::render_screen};
 use ratatui::{buffer::Buffer, crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind}, layout::Rect, style::Color};
 
@@ -85,6 +86,38 @@ fn codex_is_ready_at_its_composer_not_its_trust_dialog() {
     let mut p = vt100::Parser::new(5, 40, 0);
     p.process("\r\n  › Ask Codex to do anything".as_bytes());
     assert!(ready(AgentKind::Codex, p.screen()));
+}
+
+fn composer_after(kind: AgentKind, bytes: &str) -> Option<Composer> {
+    let mut p = vt100::Parser::new(8, 40, 0);
+    p.process(bytes.as_bytes());
+    composer(kind, p.screen())
+}
+
+#[test]
+fn the_composer_is_empty_while_the_cursor_sits_after_the_prompt() {
+    // The cursor stays right after `❯ ` while claude shows its placeholder; typing moves it past the text.
+    let placeholder = composer_after(AgentKind::Claude, "\x1b[?1049h────────\r\n❯ Try \"fix lint\"\r\n────────\x1b[2;3H").unwrap();
+    assert!(placeholder.empty, "{placeholder:?}");
+    let typed = composer_after(AgentKind::Claude, "\x1b[?1049h────────\r\n❯ src/a.ts:1-2\r\n────────\x1b[2;16H").unwrap();
+    assert_eq!(typed, Composer { text: "src/a.ts:1-2".into(), empty: false });
+    let codex = composer_after(AgentKind::Codex, "\r\n› Ask Codex to do anything\x1b[2;3H").unwrap();
+    assert!(codex.empty);
+    assert!(composer_after(AgentKind::Claude, "\x1b[?1049hDo you trust this folder?\r\n❯ 1. Yes").is_none());
+}
+
+#[test]
+fn prefill_types_into_an_empty_box_and_replaces_only_its_own_reference() {
+    let paste = |s: &str| wrap_paste(s);
+    let empty = Composer { text: "Try \"fix lint\"".into(), empty: true };
+    assert_eq!(prefill_bytes(&empty, Some("src/a.ts:1-2 "), "src/b.ts:3 "), Some(paste("src/b.ts:3 ")));
+    let ours = Composer { text: "src/a.ts:1-2".into(), empty: false };
+    let mut want = vec![0x7f; "src/a.ts:1-2 ".chars().count()];
+    want.extend(paste("src/b.ts:3 "));
+    assert_eq!(prefill_bytes(&ours, Some("src/a.ts:1-2 "), "src/b.ts:3 "), Some(want));
+    let theirs = Composer { text: "src/a.ts:1-2 why does this".into(), empty: false };
+    assert_eq!(prefill_bytes(&theirs, Some("src/a.ts:1-2 "), "src/b.ts:3 "), None, "the reviewer's own text is left alone");
+    assert_eq!(prefill_bytes(&ours, None, "src/b.ts:3 "), None, "text codemapx didn't type");
 }
 
 fn enc(code: KeyCode, m: KeyModifiers) -> Vec<u8> {
@@ -401,7 +434,8 @@ fn focusing_the_chat_queues_a_new_reference_once() {
 }
 
 /// An alternate screen with claude's composer between its rules.
-const COMPOSER: &str = "\\033[?1049h────────\\r\\n❯ \\r\\n────────";
+/// An empty claude input box: the cursor rests right after `❯ `.
+const COMPOSER: &str = "\\033[?1049h────────\\r\\n❯ \\r\\n────────\\033[2;3H";
 
 #[test]
 fn a_queued_reference_is_typed_once_the_composer_is_up() {

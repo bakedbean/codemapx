@@ -63,18 +63,36 @@ fn toml_string(s: &str) -> String {
     out
 }
 
-/// Claude's composer is up on the alternate screen as a `❯` row under a `─` rule (its trust dialog has `❯` rows
-/// but no rule above them); codex's is a `›` row with the cursor visible (its trust dialog hides the cursor).
+/// The agent's input box as read off its screen.
+#[derive(Debug, PartialEq)]
+pub struct Composer {
+    /// What follows the prompt glyph, trimmed; a placeholder hint when `empty`.
+    pub text: String,
+    /// The cursor sits right after the prompt glyph, so anything shown is a placeholder.
+    pub empty: bool,
+}
+
+/// Claude's box is a `❯` row under a `─` rule (its trust dialog has `❯` rows but no rule above them);
+/// codex's is a `›` row. None when neither is on screen.
+pub fn composer(kind: AgentKind, screen: &vt100::Screen) -> Option<Composer> {
+    let (rows, cols) = screen.size();
+    let row = |r| screen.contents_between(r, 0, r, cols);
+    let (glyph, from) = match kind {
+        AgentKind::Claude => ('❯', 1),
+        AgentKind::Codex => ('›', 0),
+    };
+    let r = (from..rows).find(|&r| row(r).trim_start().starts_with(glyph) && (kind == AgentKind::Codex || row(r - 1).trim_start().starts_with('─')))?;
+    let line = row(r);
+    let indent = line.chars().take_while(|c| c.is_whitespace()).count() as u16;
+    let text = line.trim_start().trim_start_matches(glyph).trim().to_string();
+    Some(Composer { text, empty: screen.cursor_position() == (r, indent + 2) })
+}
+
+/// Claude's composer is up on the alternate screen; codex's needs the cursor visible (its trust dialog hides it).
 pub fn ready(kind: AgentKind, screen: &vt100::Screen) -> bool {
-    match kind {
-        AgentKind::Claude => {
-            let (rows, cols) = screen.size();
-            let row = |r| screen.contents_between(r, 0, r, cols);
-            screen.alternate_screen() && (1..rows).any(|r| row(r).trim_start().starts_with('❯') && row(r - 1).trim_start().starts_with('─'))
-        }
-        AgentKind::Codex => {
-            let (rows, cols) = screen.size();
-            !screen.hide_cursor() && (0..rows).any(|r| screen.contents_between(r, 0, r, cols).trim_start().starts_with('›'))
-        }
-    }
+    let up = match kind {
+        AgentKind::Claude => screen.alternate_screen(),
+        AgentKind::Codex => !screen.hide_cursor(),
+    };
+    up && composer(kind, screen).is_some()
 }

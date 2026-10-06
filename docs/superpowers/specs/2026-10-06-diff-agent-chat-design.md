@@ -100,6 +100,12 @@ it is queued. A queued reference is written once the session is at least 1.5 s o
 been quiet for 400 ms, and the kind's composer-ready check passes. It is dropped when focus leaves the chat, and typing into a ready composer cancels it. Only
 the newest queued reference is kept.
 
+When it is written, the input box is read off the agent's screen (the prompt row; it is empty while the cursor
+sits right after the prompt glyph). An empty box gets the reference; a box holding exactly the last reference
+codemapx typed has it backspaced away first, so the new one replaces it; a box holding the reviewer's own text is
+left alone and the reference is dropped. Ctrl-c is not used to clear the box: both agents treat it as interrupt
+(or exit, on an empty box).
+
 ## Event loop
 
 - `init` also enables bracketed paste; `restore` disables it.
