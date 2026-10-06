@@ -46,11 +46,11 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `C` | reset every column to the automatic layout |
 | `q` / `esc` | quit (`esc` first closes the full-screen diff) |
 | mouse drag | drag the border between two rows, or between the diff and the functions panel, chat or minimap, to resize them |
-| mouse wheel | move the pane under the pointer: scroll the diff (also over the minimap), or ↑/↓ in the map and middle panes (focus stays put) |
+| mouse wheel | move the pane under the pointer: scroll the diff (also over the minimap), or ↑/↓ in the map and middle panes (focus stays put); over the chat it goes to the agent if it asked for mouse input, else scrolls the chat's scrollback |
 
 `o` runs `$EDITOR +<line> <path>` (default `nvim`). For editors that take another form, set a template, e.g. `CODEMAPX_EDITOR='code -g {path}:{line}'`.
 
-The chat runs `claude` by default; `CODEMAPX_AGENT=codex` runs codex instead, and `CODEMAPX_AGENT_BIN` points at another binary. The agent starts the first time you press `a`, lives until codemapx quits, and keeps nothing afterwards.
+The chat runs `claude` by default; `CODEMAPX_AGENT=codex` runs codex instead, and `CODEMAPX_AGENT_BIN` points at another binary. The agent starts the first time you press `a` and lives until codemapx quits. codemapx doesn't save or resume chats; the agent's own history settings still apply (claude, for one, keeps its transcripts as usual).
 
 The TUI captures the mouse for border drags and wheel scrolling; most terminals still select text with shift-drag (option-drag in iTerm2 and Terminal.app).
 

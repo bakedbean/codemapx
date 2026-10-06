@@ -471,3 +471,12 @@ fn wakes_coalesce_while_nobody_drains_them() {
     assert!(s.parser().screen().contents().contains("line 199"), "the reader never blocks on a full channel");
     assert!(rx.try_iter().count() <= 1);
 }
+
+#[test]
+fn snapshot_with_the_chat_shown() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE);
+    let frame = tui::snapshot(&mut a, 180, 50);
+    common::assert_golden("tests/golden/chat-180.txt", &frame);
+}

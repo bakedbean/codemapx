@@ -23,7 +23,7 @@ Done when:
 | Which agent | A separate agent that codemapx launches itself. No wsx dependency; it does not talk to the workspace's primary agent. |
 | How it runs | The agent's interactive TUI in a PTY, rendered into the panel, the way wsx hosts agents. Never a headless/print/SDK mode, so it bills like normal interactive use. |
 | Agent kinds | claude (default) and codex. `CODEMAPX_AGENT=claude\|codex` picks; `CODEMAPX_AGENT_BIN` overrides the binary. A kind table leaves room for pi/omp/hermes. |
-| Session life | Started the first time the panel opens, kept while hidden, killed on quit. Nothing persisted; no resume flags. |
+| Session life | Started the first time the panel opens, kept while hidden, killed on quit. codemapx persists nothing and passes no resume flags; the agent's own history storage still applies. |
 | Seeding | A briefing built from the merged `Map`, passed as launch instructions. |
 | File context | On focusing the panel, codemapx types a `path:start-end ` reference into the agent's composer without Enter. |
 | Permissions | Read-only: file reads and search are pre-approved; git and anything else prompt in the pane. |
