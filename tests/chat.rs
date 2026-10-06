@@ -154,7 +154,7 @@ fn wait_for(rx: &mpsc::Receiver<()>, secs: u64, mut done: impl FnMut() -> bool) 
 
 #[test]
 fn a_session_shows_output_and_resizes() {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(1);
     let mut s = Session::spawn(&sh("printf hi; sleep 2"), Path::new("/"), 5, 20, tx).unwrap();
     assert!(wait_for(&rx, 3, || s.parser().screen().contents().contains("hi")));
     s.resize(10, 40);
@@ -164,7 +164,7 @@ fn a_session_shows_output_and_resizes() {
 
 #[test]
 fn exit_is_observed() {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(1);
     let s = Session::spawn(&sh("exit 3"), Path::new("/"), 5, 20, tx).unwrap();
     assert!(wait_for(&rx, 3, || s.exit_code().is_some()));
     assert_eq!(s.exit_code(), Some(3));
@@ -172,7 +172,7 @@ fn exit_is_observed() {
 
 #[test]
 fn missing_binary_is_an_error() {
-    let (tx, _rx) = mpsc::channel();
+    let (tx, _rx) = mpsc::sync_channel(1);
     let e = Session::spawn(&["/nope/agent".to_string()], Path::new("/"), 5, 20, tx).err().unwrap();
     assert!(e.starts_with("can't run /nope/agent: "), "{e}");
 }
@@ -189,11 +189,11 @@ fn settled_needs_age_quiet_and_some_output() {
 
 #[test]
 fn wheel_reports_only_when_the_program_asks_for_mouse() {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(1);
     let s = Session::spawn(&sh("printf '\\033[?1000h\\033[?1006hm'; sleep 2"), Path::new("/"), 5, 20, tx).unwrap();
     assert!(wait_for(&rx, 3, || s.parser().screen().contents().contains('m')));
     assert_eq!(s.wheel_bytes(true, 3, 2), Some(b"\x1b[<64;3;2M".to_vec()));
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(1);
     let s = Session::spawn(&sh("printf x; sleep 2"), Path::new("/"), 5, 20, tx).unwrap();
     assert!(wait_for(&rx, 3, || s.parser().screen().contents().contains('x')));
     assert_eq!(s.wheel_bytes(true, 3, 2), None);
@@ -461,4 +461,13 @@ fn queueing_the_last_typed_ref_drops_a_pending_one() {
     chat.queue("y".into());
     chat.queue("x".into());
     assert!(chat.queued.is_none());
+}
+
+#[test]
+fn wakes_coalesce_while_nobody_drains_them() {
+    let (tx, rx) = mpsc::sync_channel(1);
+    let s = Session::spawn(&sh("i=0; while [ $i -lt 200 ]; do printf 'line %s\\n' $i; i=$((i+1)); done; sleep 2"), Path::new("/"), 5, 20, tx).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(s.parser().screen().contents().contains("line 199"), "the reader never blocks on a full channel");
+    assert!(rx.try_iter().count() <= 1);
 }

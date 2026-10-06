@@ -40,13 +40,13 @@ pub struct Chat {
     pub queued: Option<String>,
     /// The last reference typed, so refocusing on the same lines doesn't repeat it.
     pub last_ref: Option<String>,
-    wake_tx: mpsc::Sender<()>,
+    wake_tx: mpsc::SyncSender<()>,
     wake: mpsc::Receiver<()>,
 }
 
 impl Chat {
     pub fn new(kind: AgentKind) -> Self {
-        let (wake_tx, wake) = mpsc::channel();
+        let (wake_tx, wake) = mpsc::sync_channel(1);
         Chat { kind, session: None, error: None, queued: None, last_ref: None, wake_tx, wake }
     }
 

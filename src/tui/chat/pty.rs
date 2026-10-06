@@ -3,7 +3,7 @@
 use std::{
     io::{Read, Write},
     path::Path,
-    sync::{Arc, Mutex, MutexGuard, mpsc::Sender},
+    sync::{Arc, Mutex, MutexGuard, mpsc::SyncSender},
     thread,
     time::{Duration, Instant},
 };
@@ -32,8 +32,9 @@ fn pty_size(rows: u16, cols: u16) -> PtySize {
 }
 
 impl Session {
-    /// Runs `argv` in `cwd` with the parent's environment; `wake` gets `()` after each chunk of output and at exit.
-    pub fn spawn(argv: &[String], cwd: &Path, rows: u16, cols: u16, wake: Sender<()>) -> Result<Session, String> {
+    /// Runs `argv` in `cwd` with the parent's environment; `wake` gets `()` after output and at exit.
+    /// Wakes are coalesced (`try_send` on a one-slot channel), so they can't pile up while the UI is paused in the editor.
+    pub fn spawn(argv: &[String], cwd: &Path, rows: u16, cols: u16, wake: SyncSender<()>) -> Result<Session, String> {
         let bin = argv.first().ok_or("no agent command")?;
         let fail = |e: &dyn std::fmt::Display| format!("can't run {bin}: {e}");
         let pair = native_pty_system().openpty(pty_size(rows, cols)).map_err(|e| fail(&e))?;
@@ -54,10 +55,10 @@ impl Session {
             while let Ok(n @ 1..) = reader.read(&mut buf) {
                 p.lock().unwrap().process(&buf[..n]);
                 *l.lock().unwrap() = Some(Instant::now());
-                let _ = wake.send(());
+                let _ = wake.try_send(());
             }
             *x.lock().unwrap() = Some(child.wait().map(|s| s.exit_code()).unwrap_or(u32::MAX));
-            let _ = wake.send(());
+            let _ = wake.try_send(());
         });
         Ok(Session { parser, master: pair.master, writer, killer, exit, last_output, started: Instant::now(), size: (rows, cols) })
     }
