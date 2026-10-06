@@ -98,7 +98,8 @@ fn jump_minimap(app: &mut App, col: u16, row: u16) {
 /// Moves the minimap's left edge to `x`, clamped like drawing clamps it.
 fn resize_minimap(app: &mut App, x: i32) {
     let row = app.panes[2];
-    app.minimap_width = Some(minimap::width(Some((row.right() as i32 - x).max(0) as u16), row.width));
+    let reserve = if app.chat_pane.width > 0 { chat::MIN_WIDTH } else { 0 } + if app.fns_pane.width > 0 { fns_pane::MIN_WIDTH } else { 0 };
+    app.minimap_width = Some(minimap::width(Some((row.right() as i32 - x).max(0) as u16), row.width.saturating_sub(reserve)));
 }
 
 /// Moves the functions panel's right edge to `x`, clamped like drawing clamps it.

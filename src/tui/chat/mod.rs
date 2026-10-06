@@ -6,7 +6,7 @@ pub mod keys;
 pub mod pty;
 pub mod render;
 
-use std::{env, path::Path, sync::mpsc, time::{Duration, Instant}};
+use std::{env, path::Path, sync::mpsc, time::Instant};
 
 use ratatui::{
     prelude::*,
@@ -18,11 +18,8 @@ use crate::{facts::Status, map::CardKind};
 use agent::AgentKind;
 use pty::Session;
 
-/// How long a reference waits for the agent's composer before it is dropped.
-const PREFILL_TIMEOUT: Duration = Duration::from_secs(10);
-
 /// Narrowest the panel gets, borders included.
-const MIN_WIDTH: u16 = 40;
+pub(crate) const MIN_WIDTH: u16 = 40;
 
 /// The panel's width out of `room` columns (the diff row less the minimap and the functions panel's minimum): 40% by default, leaving the diff `MIN_DIFF_WIDTH`.
 pub(crate) fn width(want: Option<u16>, room: u16) -> u16 {
@@ -39,8 +36,8 @@ pub struct Chat {
     pub session: Option<Session>,
     /// Why the agent couldn't start; shown in place of it.
     pub error: Option<String>,
-    /// A reference waiting for the composer, and when it was queued.
-    pub queued: Option<(String, Instant)>,
+    /// A reference waiting for the composer.
+    pub queued: Option<String>,
     /// The last reference typed, so refocusing on the same lines doesn't repeat it.
     pub last_ref: Option<String>,
     wake_tx: mpsc::Sender<()>,
@@ -70,30 +67,29 @@ impl Chat {
         }
     }
 
-    /// Writes to the agent and returns its view to the live screen.
+    /// Writes to the agent and returns its view to the live screen; typing into a ready composer cancels a queued reference.
     pub fn write(&mut self, bytes: &[u8]) {
         if let Some(s) = &mut self.session {
+            if agent::ready(self.kind, s.parser().screen()) {
+                self.queued = None;
+            }
             s.scroll_to_live();
             s.write(bytes);
         }
     }
 
     /// Keeps only the newest reference, and none that was just typed.
-    pub fn queue(&mut self, r: String, now: Instant) {
-        if self.last_ref.as_deref() == Some(r.as_str()) {
-            self.queued = None;
-        } else {
-            self.queued = Some((r, now));
-        }
+    pub fn queue(&mut self, r: String) {
+        self.queued = if self.last_ref.as_deref() == Some(r.as_str()) { None } else { Some(r) };
     }
 
-    /// Types the queued reference, without Enter, once the agent is settled and its composer is up.
-    pub fn tick(&mut self, now: Instant) {
-        let Some((r, at)) = &self.queued else { return };
-        if now.duration_since(*at) > PREFILL_TIMEOUT {
+    /// Types the queued reference, without Enter, once the agent is settled and its composer is up; leaving the chat drops it.
+    pub fn tick(&mut self, now: Instant, focused: bool) {
+        if !focused {
             self.queued = None;
             return;
         }
+        let Some(r) = &self.queued else { return };
         let Some(s) = &mut self.session else { return };
         if !(s.settled(now) && agent::ready(self.kind, s.parser().screen())) {
             return;

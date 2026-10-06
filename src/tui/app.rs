@@ -1,6 +1,6 @@
 //! TUI state and navigation over a merged `Map`.
 
-use std::{path::PathBuf, time::Instant};
+use std::path::PathBuf;
 
 use ratatui::{layout::Rect, widgets::ListState};
 
@@ -344,7 +344,7 @@ impl App {
         }
         let Some(r) = chat::reference(self, prev) else { return };
         if let Some(c) = self.chat.as_mut() {
-            c.queue(r, Instant::now());
+            c.queue(r);
         }
     }
 

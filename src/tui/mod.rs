@@ -134,8 +134,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         link_panes::draw(f, app, rows[3]);
     }
     let row = rows[4];
-    let mm_w = if app.show_minimap { minimap::width(app.minimap_width, row.width) } else { 0 };
     let fns_on = app.show_fns && area.width >= fns_pane::MIN_TERM_WIDTH;
+    let reserve = (if app.show_chat { chat::MIN_WIDTH } else { 0 }) + (if fns_on { fns_pane::MIN_WIDTH } else { 0 });
+    let mm_w = if app.show_minimap { minimap::width(app.minimap_width, row.width.saturating_sub(reserve)) } else { 0 };
     let chat_w = if app.show_chat { chat::width(app.chat_width, chat::room(row.width, mm_w, fns_on)) } else { 0 };
     let fns_w = if fns_on { fns_pane::width(app.fns_width, row.width - mm_w - chat_w) } else { 0 };
     if fns_w == 0 && app.focus == Pane::Functions {
@@ -240,12 +241,14 @@ fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<
             term.draw(|f| draw(f, app))?;
         }
         dirty = true;
+        let focused = app.focus == Pane::Chat;
+        let shown = app.chat_pane.width > 0;
         if let Some(c) = app.chat.as_mut().filter(|c| c.live()) {
-            c.tick(Instant::now());
+            c.tick(Instant::now(), focused);
             let woke = c.drain_wake();
             if !event::poll(Duration::from_millis(16))? {
                 // An exit also wakes, and the next draw shows it; after that the loop blocks again.
-                dirty = woke || !c.live();
+                dirty = (woke && shown) || !c.live();
                 continue;
             }
         }

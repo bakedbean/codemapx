@@ -622,7 +622,8 @@ fn dragging_the_minimap_border_resizes_it_and_leaves_the_diff_forty_columns() {
     assert_eq!(a.minimap.width, 26);
     let x = a.minimap.x;
     drag_across(&mut a, row, x, 0);
-    assert_eq!(a.minimap.width, 140);
+    // 180 less the functions minimum (16) and the diff (40).
+    assert_eq!(a.minimap.width, 124);
     let x = a.minimap.x;
     drag_across(&mut a, row, x, 179);
     assert_eq!(a.minimap.width, 8);

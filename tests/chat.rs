@@ -49,7 +49,7 @@ fn agent_kind_comes_from_the_env() {
 fn claude_argv_is_read_only_with_the_briefing() {
     assert_eq!(
         argv(AgentKind::Claude, None, "brief"),
-        ["claude", "--allowedTools", "Read", "Grep", "Glob", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)", "--append-system-prompt", "brief"]
+        ["claude", "--permission-mode", "default", "--allowedTools", "Read", "Grep", "Glob", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)", "--append-system-prompt", "brief"]
     );
     assert_eq!(argv(AgentKind::Claude, Some("/opt/claude"), "b")[0], "/opt/claude");
     assert_eq!(argv(AgentKind::Claude, Some(""), "b")[0], "claude");
@@ -64,11 +64,16 @@ fn codex_argv_escapes_the_briefing() {
 }
 
 #[test]
-fn claude_is_ready_on_the_alternate_screen() {
-    let mut p = vt100::Parser::new(5, 40, 0);
-    assert!(!ready(AgentKind::Claude, p.screen()));
-    p.process(b"\x1b[?1049h");
-    assert!(ready(AgentKind::Claude, p.screen()));
+fn claude_is_ready_at_its_composer_on_the_alternate_screen() {
+    let ready_after = |bytes: &str| {
+        let mut p = vt100::Parser::new(8, 40, 0);
+        p.process(bytes.as_bytes());
+        ready(AgentKind::Claude, p.screen())
+    };
+    assert!(!ready_after("\x1b[?1049h"), "no composer");
+    assert!(!ready_after("\x1b[?1049hDo you trust the files in this folder?\r\n❯ 1. Yes, proceed\r\n  2. No, exit"), "trust dialog");
+    assert!(ready_after("\x1b[?1049h────────\r\n❯ \r\n────────"), "composer");
+    assert!(!ready_after("────────\r\n❯ \r\n────────"), "composer without the alternate screen");
 }
 
 #[test]
@@ -271,10 +276,13 @@ fn tab_reaches_the_chat_only_while_shown() {
 fn chat_width_leaves_the_diff_forty_columns() {
     let mut a = app();
     a.show_chat = true;
-    for w in [100u16, 120, 130, 150, 180] {
-        tui::snapshot(&mut a, w, 50);
-        let diff = a.panes[2].width - a.fns_pane.width - a.chat_pane.width - a.minimap.width;
-        assert!(a.chat_pane.width >= 40 && diff >= 40, "w={w}: chat {} diff {diff}", a.chat_pane.width);
+    for mm in [None, Some(200)] {
+        a.minimap_width = mm;
+        for w in [100u16, 120, 130, 150, 180] {
+            tui::snapshot(&mut a, w, 50);
+            let diff = a.panes[2].width - a.fns_pane.width - a.chat_pane.width - a.minimap.width;
+            assert!(a.chat_pane.width >= 40 && diff >= 40, "w={w} minimap {mm:?}: chat {} diff {diff}", a.chat_pane.width);
+        }
     }
 }
 
@@ -380,7 +388,7 @@ fn focusing_the_chat_queues_a_new_reference_once() {
     a.focus = Pane::Diff;
     press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE);
     tui::snapshot(&mut a, 180, 50);
-    let queued = a.chat.as_ref().unwrap().queued.clone().map(|(r, _)| r);
+    let queued = a.chat.as_ref().unwrap().queued.clone();
     assert!(queued.as_deref().is_some_and(|r| r.starts_with("src/billing/apply.ts:1-")), "{queued:?}");
     // Already typed: refocusing on the same lines queues nothing.
     let chat = a.chat.as_mut().unwrap();
@@ -392,14 +400,17 @@ fn focusing_the_chat_queues_a_new_reference_once() {
     assert!(a.chat.as_ref().unwrap().queued.is_none());
 }
 
+/// An alternate screen with claude's composer between its rules.
+const COMPOSER: &str = "\\033[?1049h────────\\r\\n❯ \\r\\n────────";
+
 #[test]
 fn a_queued_reference_is_typed_once_the_composer_is_up() {
     let mut chat = codemapx::tui::chat::Chat::new(AgentKind::Claude);
-    chat.start(&sh("printf '\\033[?1049h'; exec cat"), Path::new("/"), 5, 40);
-    chat.queue("src/a.ts:1-2 ".into(), Instant::now());
+    chat.start(&sh(&format!("printf '{COMPOSER}'; exec cat")), Path::new("/"), 5, 40);
+    chat.queue("src/a.ts:1-2 ".into());
     let end = Instant::now() + Duration::from_secs(5);
     while chat.queued.is_some() && Instant::now() < end {
-        chat.tick(Instant::now());
+        chat.tick(Instant::now(), true);
         std::thread::sleep(Duration::from_millis(50));
     }
     assert!(chat.queued.is_none());
@@ -417,20 +428,34 @@ fn a_queued_reference_is_typed_once_the_composer_is_up() {
 }
 
 #[test]
-fn a_stale_reference_is_dropped() {
-    let mut chat = codemapx::tui::chat::Chat::new(AgentKind::Claude);
-    chat.queue("src/a.ts ".into(), Instant::now() - Duration::from_secs(11));
-    chat.tick(Instant::now());
+fn a_queued_reference_is_dropped_when_the_chat_loses_focus() {
+    let mut chat = Chat::new(AgentKind::Claude);
+    chat.last_ref = Some("old ".into());
+    chat.queue("src/a.ts ".into());
+    chat.tick(Instant::now(), false);
     assert!(chat.queued.is_none());
-    assert!(chat.last_ref.is_none());
+    assert_eq!(chat.last_ref.as_deref(), Some("old "));
+}
+
+#[test]
+fn typing_into_a_ready_composer_drops_a_queued_reference() {
+    let mut chat = Chat::new(AgentKind::Claude);
+    chat.start(&sh(&format!("printf '{COMPOSER}'; exec cat")), Path::new("/"), 5, 40);
+    let s = || chat.session.as_ref().unwrap();
+    let end = Instant::now() + Duration::from_secs(5);
+    while !ready(AgentKind::Claude, s().parser().screen()) && Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    chat.queue("src/a.ts ".into());
+    chat.write(b"x");
+    assert!(chat.queued.is_none());
 }
 
 #[test]
 fn queueing_the_last_typed_ref_drops_a_pending_one() {
-    let now = std::time::Instant::now();
     let mut chat = Chat::new(AgentKind::Claude);
     chat.last_ref = Some("x".into());
-    chat.queue("y".into(), now);
-    chat.queue("x".into(), now);
+    chat.queue("y".into());
+    chat.queue("x".into());
     assert!(chat.queued.is_none());
 }
