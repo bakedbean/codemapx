@@ -447,6 +447,9 @@ fn typing_into_a_ready_composer_drops_a_queued_reference() {
         std::thread::sleep(Duration::from_millis(20));
     }
     chat.queue("src/a.ts ".into());
+    // A swallowed key (ctrl-d, ctrl-z, F-keys) encodes to nothing and isn't typing.
+    chat.write(&encode_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL)));
+    assert!(chat.queued.is_some());
     chat.write(b"x");
     assert!(chat.queued.is_none());
 }

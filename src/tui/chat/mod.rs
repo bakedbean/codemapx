@@ -68,7 +68,11 @@ impl Chat {
     }
 
     /// Writes to the agent and returns its view to the live screen; typing into a ready composer cancels a queued reference.
+    /// Empty `bytes` (a swallowed key) do nothing.
     pub fn write(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
         if let Some(s) = &mut self.session {
             if agent::ready(self.kind, s.parser().screen()) {
                 self.queued = None;

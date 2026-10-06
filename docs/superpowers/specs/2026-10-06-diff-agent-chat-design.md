@@ -40,7 +40,8 @@ The diff row becomes `[functions | diff | chat | minimap]`; the minimap's width 
 - The panel also shows in full-screen diff (`d`). Narrow terminals (below `MIN_WIDTH`) hide it
   like everything else.
 - `Pane::Chat` joins the tab cycle when the panel is on screen. A left click inside it focuses it.
-- While focused, every key is encoded and written to the PTY, except Ctrl-x, which focuses the
+- While focused, every key is encoded and written to the PTY, except Ctrl-d and Ctrl-z (swallowed, as in
+  wsx, so a slip can't end or suspend the agent) and Ctrl-x, which focuses the
   diff. `q`, `esc`, arrows etc. all go to the agent.
 - Bracketed pastes are forwarded wrapped in `ESC[200~ … ESC[201~` when the panel is focused.
 - The wheel over the panel goes to the agent as SGR wheel reports when it has mouse reporting on;
