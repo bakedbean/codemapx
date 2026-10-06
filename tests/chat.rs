@@ -7,7 +7,7 @@ use codemapx::tui::chat::briefing::briefing;
 use codemapx::tui::chat::pty::{Session, settled};
 use codemapx::tui::chat::agent::{AgentKind, argv, ready};
 use codemapx::tui::chat::{keys::{encode_key, wrap_paste}, render::render_screen};
-use ratatui::{buffer::Buffer, crossterm::event::{KeyCode, KeyEvent, KeyModifiers}, layout::Rect, style::Color};
+use ratatui::{buffer::Buffer, crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind}, layout::Rect, style::Color};
 
 #[test]
 fn briefing_covers_the_map_without_diffs() {
@@ -284,4 +284,57 @@ fn chat_errors_show_in_the_panel() {
     a.chat.as_mut().unwrap().start(&["/nope/agent".to_string()], Path::new("/"), 5, 20);
     let frame = tui::snapshot(&mut a, 180, 50);
     assert!(frame.contains("can't run /nope/agent"), "{frame}");
+}
+
+fn mouse_at(a: &mut App, kind: MouseEventKind, column: u16, row: u16) {
+    tui::mouse::handle(a, MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE });
+}
+
+fn chat_app() -> App {
+    let mut a = app();
+    a.show_chat = true;
+    tui::snapshot(&mut a, 180, 50);
+    a
+}
+
+#[test]
+fn clicking_the_chat_focuses_it() {
+    let mut a = chat_app();
+    let c = a.chat_pane;
+    mouse_at(&mut a, MouseEventKind::Down(MouseButton::Left), c.x + 5, c.y + 3);
+    mouse_at(&mut a, MouseEventKind::Up(MouseButton::Left), c.x + 5, c.y + 3);
+    assert_eq!(a.focus, Pane::Chat);
+}
+
+#[test]
+fn dragging_the_chat_border_resizes_it_within_limits() {
+    let mut a = chat_app();
+    let (c, diff) = (a.chat_pane, a.panes[2]);
+    let row = c.y + 2;
+    let drag = |a: &mut App, from: u16, to: u16| {
+        mouse_at(a, MouseEventKind::Down(MouseButton::Left), from, row);
+        mouse_at(a, MouseEventKind::Drag(MouseButton::Left), to, row);
+        mouse_at(a, MouseEventKind::Up(MouseButton::Left), to, row);
+        tui::snapshot(a, 180, 50);
+    };
+    drag(&mut a, c.x, c.x - 10);
+    assert_eq!(a.chat_pane.width, c.width + 10);
+    assert_eq!(a.panes[2], diff);
+    assert_eq!(a.focus, Pane::Map, "a border drag doesn't focus the chat");
+    let x = a.chat_pane.x;
+    drag(&mut a, x, 179);
+    assert_eq!(a.chat_pane.width, 40);
+    let x = a.chat_pane.x;
+    drag(&mut a, x, 0);
+    assert_eq!(a.chat_pane.width, 104, "180 less the minimap (20), the functions minimum (16) and the diff (40)");
+    assert_eq!(a.fns_pane.width, 16);
+    assert_eq!(a.panes[2].width - a.fns_pane.width - a.chat_pane.width - a.minimap.width, 40);
+}
+
+#[test]
+fn the_wheel_over_an_empty_chat_leaves_the_diff_alone() {
+    let mut a = chat_app();
+    let c = a.chat_pane;
+    mouse_at(&mut a, MouseEventKind::ScrollDown, c.x + 5, c.y + 3);
+    assert_eq!(a.scroll, 0);
 }
