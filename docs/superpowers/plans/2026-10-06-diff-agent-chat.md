@@ -14,12 +14,12 @@
 
 - Never launch an agent in headless/print/SDK mode; always its interactive TUI.
 - Agent kinds: `claude` (default) and `codex`; `CODEMAPX_AGENT=claude|codex` picks, `CODEMAPX_AGENT_BIN` overrides the binary.
-- Read-only: claude gets `--allowedTools Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"`; codex gets `-s read-only -a on-request`.
+- Read-only: claude gets `--permission-mode default --allowedTools Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"`; codex gets `-s read-only -a on-request`.
 - No session id / resume flags; nothing persisted.
 - `view --snapshot` and every test must never start a real agent.
-- Panel: `a` toggles, starts hidden, default width 40% of the row's room (row less the minimap, and less the functions panel's 16-column minimum when it is shown), minimum 40 columns, diff keeps `MIN_DIFF_WIDTH` (40).
+- Panel: `a` toggles, starts hidden, default width 40% of the row's room (row less the minimap, and less the functions panel's 16-column minimum when it is shown), minimum 40 columns, the minimap's width reserves the chat and functions minimums, diff keeps `MIN_DIFF_WIDTH` (40).
 - Ctrl-x is the only key the focused panel keeps; everything else goes to a live agent.
-- Prefill waits for session age ≥ 1.5 s, output quiet ≥ 400 ms and the composer-ready check; dropped after 10 s; only the newest is kept.
+- Prefill waits for session age ≥ 1.5 s, output quiet ≥ 400 ms and the composer-ready check (claude: alternate screen plus a `❯` row under a `─` rule); dropped when focus leaves the chat, and typing into a ready composer cancels it; only the newest is kept.
 - Dependencies: `portable-pty = "0.9"`, `vt100 = { version = "0.15.2", package = "fnug-vt100" }`.
 - Comments: terse, one sentence for the non-obvious contract, matching the surrounding code. No Claude attribution in commits.
 - Goldens refresh with `UPDATE_GOLDEN=1 cargo test`; review `git diff tests/golden` before committing.

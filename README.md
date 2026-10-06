@@ -38,8 +38,8 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `d` | full-screen diff (the diff pane always shows the whole file, with the changes in place) |
 | `m` | show or hide the minimap right of the diff: the whole file shrunk to fit, added lines green, deleted lines red, the visible part shaded; click it to jump there |
 | `f` | show or hide the functions panel left of the diff: a TS/JS file's top-level functions (including consts holding one), classes and their methods, `+` on those this branch added or deleted lines inside; moving in it jumps the diff to that function |
-| `a` | show or hide the agent chat between the diff and the minimap: claude (or codex) running in its own TUI, read-only, briefed on the branch's map; focusing it types a `path:start-end` reference for the lines you were on |
-| `ctrl-x` | in the chat, return focus to the diff (every other key goes to the agent) |
+| `a` | show or hide the agent chat between the diff and the minimap: claude (or codex) running in its own TUI, read-only (claude runs with `--permission-mode default`, so non-read tools prompt in the panel), briefed on the branch's map; focusing it queues a `path:start-end` reference for the lines you were on, typed once the composer is up and held while you stay in the chat |
+| `ctrl-x` | in the chat, return focus to the diff; while the agent runs every other key goes to it, and after it exits ⏎ restarts it |
 | `J` `K` | page the diff |
 | `t` | expand the Tests/Docs columns, which start collapsed (in narrow terminals this collapses the others) |
 | `c` | collapse or expand the column holding the selected card |

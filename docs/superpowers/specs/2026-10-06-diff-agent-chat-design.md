@@ -31,7 +31,7 @@ Done when:
 
 ## Layout and keys
 
-The diff row becomes `[functions | diff | chat | minimap]`.
+The diff row becomes `[functions | diff | chat | minimap]`; the minimap's width reserves the chat's and functions panel's minimums.
 
 - `a` shows or hides the panel. It starts hidden; the first show starts the agent and focuses
   the panel. Hiding while focused focuses the diff.
@@ -45,7 +45,7 @@ The diff row becomes `[functions | diff | chat | minimap]`.
 - Bracketed pastes are forwarded wrapped in `ESC[200~ … ESC[201~` when the panel is focused.
 - The wheel over the panel goes to the agent as SGR wheel reports when it has mouse reporting on;
   otherwise it scrolls codemapx's own scrollback (1000 lines). Any key returns to the live screen.
-- The panel title shows the agent kind, and `focused · ctrl-x leaves` while focused.
+- The panel title shows the agent kind, and `· ctrl-x leaves` while focused.
 - When the agent exits, the panel shows `agent exited (code N) — ⏎ to restart`; ⏎ in the
   focused panel starts a fresh one.
 - `o` (open in editor) suspends the TUI as today; the agent keeps running.
@@ -78,8 +78,8 @@ area.
 | | claude | codex |
 |---|---|---|
 | Instructions | `--append-system-prompt <briefing>` | `-c developer_instructions=<briefing as TOML basic string>` |
-| Read-only | `--allowedTools Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"` | `-s read-only -a on-request` |
-| Composer ready | alternate screen is active | a row starting with `›` and the cursor visible |
+| Read-only | `--permission-mode default --allowedTools Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"` | `-s read-only -a on-request` |
+| Composer ready | alternate screen is active and a `❯` row sits under a `─` rule | a row starting with `›` and the cursor visible |
 | Insert | bracketed paste, no CR | bracketed paste, no CR |
 
 If the binary can't be started, the panel shows `can't run <bin>: <err>` and nothing else changes.
@@ -96,7 +96,7 @@ If the binary can't be started, the panel shows `can't run <bin>: <err>` and not
 None for missing cards, deleted files and binaries. The result is `path:start-end ` (or
 `path:line `). Each time the panel gains focus, if the reference differs from the last one typed,
 it is queued. A queued reference is written once the session is at least 1.5 s old, its output has
-been quiet for 400 ms, and the kind's composer-ready check passes; after 10 s it is dropped. Only
+been quiet for 400 ms, and the kind's composer-ready check passes. It is dropped when focus leaves the chat, and typing into a ready composer cancels it. Only
 the newest queued reference is kept.
 
 ## Event loop
