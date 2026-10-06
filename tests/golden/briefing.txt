@@ -1,0 +1,45 @@
+You are answering a reviewer's questions about branch `feature/12-apply-fees` of `sample`, from a chat panel inside codemapx, a TUI for reviewing a branch's changes.
+- Read-only: do not edit, create or delete files, and do not commit.
+- A reference like `src/a.ts:42-61` means those lines of the file at HEAD.
+- Keep answers short unless asked for more.
+
+## Branch
+
+base f0d0cd51c61cc4b3ae21c195f49dfd2bda7f64c5, head 4f5b7592e3d1e5038ee9d61fae96e5d194ef559c, 1 commits, 8 files, +30 −4
+
+## Map: Apply regenerated fees
+
+Adds an apply step that writes regenerated fee rows, plus the type and mills helper it needs.
+
+## Changed files, in reading order
+
+- `src/billing/types.ts` (modified, +5 −0): Adds Insertion, the row the apply step writes.
+  - Insertion (interface, lines 6-9): A fee plus why it is being inserted.
+- `src/billing/mills.ts` (modified, +5 −0): Adds millsToDecimal, the reverse of toMills, so amounts are written back exactly.
+  - millsToDecimal (function, lines 5-8): Throws on non-integer mills.
+- `src/billing/apply.ts` (added, +6 −0): New. Turns insertions into fee rows.
+  - applyChanges (function, lines 4-6): Formats each amount with millsToDecimal.
+- `src/api/route.ts` (added, +6 −0): New entry point that wraps fees as insertions and applies them.
+  - handle (function, lines 4-6): Marks every fee as a regeneration.
+- `src/api/legacy.ts` (deleted, +0 −3): Removed; the new route replaces it.
+- `src/util/fmt.ts` (renamed, +0 −0): Renamed from format.ts; no code change.
+- `src/billing/mills.test.ts` (modified, +5 −1): Covers millsToDecimal.
+- `docs/apply.md` (added, +3 −0): Documents applyChanges.
+
+## Links (an edit in the first made the edit in the second necessary)
+
+- `src/billing/apply.ts` → `src/api/route.ts`: The route calls applyChanges.
+- `src/billing/mills.ts` → `src/billing/apply.ts`: apply formats amounts with millsToDecimal.
+- `src/billing/mills.ts` → `src/billing/mills.test.ts`: Tests the new millsToDecimal.
+- `src/billing/types.ts` → `src/billing/apply.ts`: apply consumes the new Insertion type.
+- `src/jobs/fee-writer.ts` → `src/billing/apply.ts`: Both write fee rows, so apply mirrors writeFee's fields.
+
+## Context and not built
+
+- `src/jobs/fee-writer.ts` (unchanged context): Another writer of fee rows; apply must produce the same shape.
+- `Enqueue regeneration` (not built yet): Nothing calls the route yet.
+
+## Where to look
+
+- `git diff f0d0cd51c61cc4b3ae21c195f49dfd2bda7f64c5...HEAD -- <path>` shows a file's change.
+- Raw facts: `/state/map/facts.json`; annotations: `/state/map/annotations.json`.

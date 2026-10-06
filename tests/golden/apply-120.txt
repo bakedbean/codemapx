@@ -49,4 +49,4 @@
 │                                                                                                  ││                  │
 │                                                                                                  ││                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯╰──────────────────╯
- ←/→ step  tab pane  ↑/↓ move  h/l col  c fold  ⏎ follow  o open  d full  f fns  m minimap  J/K page  t tests  q quit
+ ←/→ step  tab pane  ↑/↓ move  h/l col  c fold  ⏎ follow  o open  d full  f fns  m minimap  a chat  J/K page  t tests  q

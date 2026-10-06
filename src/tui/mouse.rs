@@ -1,5 +1,5 @@
 //! Dragging the borders between the map, the middle row, the diff and the panels beside it, wheel-scrolling the pane under the pointer,
-//! and clicking the minimap to jump the diff.
+//! clicking the minimap to jump the diff, and focusing, resizing and wheeling the chat panel.
 
 use ratatui::{
     crossterm::event::{MouseButton, MouseEvent, MouseEventKind},
@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::{
-    MIN_ROW_H, fns_pane, minimap,
+    MIN_ROW_H, chat, fns_pane, minimap,
     app::{App, Divider, Pane},
 };
 
@@ -15,16 +15,23 @@ use super::{
 const WHEEL_LINES: isize = 3;
 
 pub fn handle(app: &mut App, ev: MouseEvent) {
+    let prev = app.focus;
+    dispatch(app, ev);
+    app.note_focus(prev);
+}
+
+fn dispatch(app: &mut App, ev: MouseEvent) {
     match ev.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             app.drag = grab(app, ev.column, ev.row);
-            if app.drag.is_none() {
+            if app.drag.is_none() && !focus_chat(app, ev.column, ev.row) {
                 jump_minimap(app, ev.column, ev.row);
             }
         }
         MouseEventKind::Drag(MouseButton::Left) => match app.drag {
             Some((Divider::FnsDiff, offset)) => resize_fns(app, ev.column as i32 - offset),
             Some((Divider::DiffMinimap, offset)) => resize_minimap(app, ev.column as i32 - offset),
+            Some((Divider::DiffChat, offset)) => resize_chat(app, ev.column as i32 - offset),
             None => jump_minimap(app, ev.column, ev.row),
             Some((d, offset)) => resize(app, d, ev.row as i32 - offset),
         },
@@ -40,6 +47,9 @@ fn wheel(app: &mut App, ev: MouseEvent, d: isize) {
     let [map, _, diff] = app.panes;
     let [from, inside, to] = app.mid_panes;
     let at = Position::new(ev.column, ev.row);
+    if app.chat_pane.contains(at) {
+        return wheel_chat(app, ev, d);
+    }
     if app.minimap.contains(at) {
         return app.scroll_by(d * WHEEL_LINES);
     }
@@ -68,7 +78,9 @@ fn grab(app: &App, col: u16, row: u16) -> Option<(Divider, i32)> {
     let fns = (p.width > 0 && row > p.y && row + 1 < p.bottom() && (col == x || col + 1 == x)).then(|| (Divider::FnsDiff, col as i32 - x as i32));
     let m = app.minimap;
     let mm = (m.width > 0 && row > m.y && row + 1 < m.bottom() && (col == m.x || col + 1 == m.x)).then(|| (Divider::DiffMinimap, col as i32 - m.x as i32));
-    rows.or(fns).or(mm)
+    let c = app.chat_pane;
+    let chat = (c.width > 0 && row > c.y && row + 1 < c.bottom() && (col == c.x || col + 1 == c.x)).then(|| (Divider::DiffChat, col as i32 - c.x as i32));
+    rows.or(fns).or(chat).or(mm)
 }
 
 /// Scrolls the diff so the line under a press or drag inside the minimap sits mid-pane.
@@ -86,13 +98,14 @@ fn jump_minimap(app: &mut App, col: u16, row: u16) {
 /// Moves the minimap's left edge to `x`, clamped like drawing clamps it.
 fn resize_minimap(app: &mut App, x: i32) {
     let row = app.panes[2];
-    app.minimap_width = Some(minimap::width(Some((row.right() as i32 - x).max(0) as u16), row.width));
+    let reserve = if app.chat_pane.width > 0 { chat::MIN_WIDTH } else { 0 } + if app.fns_pane.width > 0 { fns_pane::MIN_WIDTH } else { 0 };
+    app.minimap_width = Some(minimap::width(Some((row.right() as i32 - x).max(0) as u16), row.width.saturating_sub(reserve)));
 }
 
 /// Moves the functions panel's right edge to `x`, clamped like drawing clamps it.
 fn resize_fns(app: &mut App, x: i32) {
     let row = app.panes[2];
-    app.fns_width = Some(fns_pane::width(Some((x - app.fns_pane.x as i32).max(0) as u16), row.width - app.minimap.width));
+    app.fns_width = Some(fns_pane::width(Some((x - app.fns_pane.x as i32).max(0) as u16), row.width - app.minimap.width - app.chat_pane.width));
 }
 
 /// Moves divider `d` to `y`, trading rows only between the two panes it separates.
@@ -101,9 +114,37 @@ fn resize(app: &mut App, d: Divider, y: i32) {
     let (above, below) = match d {
         Divider::MapMid => (map, mid),
         Divider::MidDiff => (mid, diff),
-        Divider::FnsDiff | Divider::DiffMinimap => return,
+        Divider::FnsDiff | Divider::DiffChat | Divider::DiffMinimap => return,
     };
     let total = above.height + below.height;
     let h = (y - above.y as i32).clamp(MIN_ROW_H as i32, total.saturating_sub(MIN_ROW_H).max(MIN_ROW_H) as i32) as u16;
     app.heights = Some(if d == Divider::MapMid { (h, total.saturating_sub(h)) } else { (map.height, h) });
+}
+
+/// A press inside the chat's borders focuses it.
+fn focus_chat(app: &mut App, col: u16, row: u16) -> bool {
+    let c = app.chat_pane;
+    let inside = c.width > 0 && col > c.x && col + 1 < c.right() && row > c.y && row + 1 < c.bottom();
+    if inside {
+        app.focus = Pane::Chat;
+    }
+    inside
+}
+
+/// Moves the chat's left edge to `x`, clamped like drawing clamps it.
+fn resize_chat(app: &mut App, x: i32) {
+    let room = chat::room(app.panes[2].width, app.minimap.width, app.fns_pane.width > 0);
+    app.chat_width = Some(chat::width(Some((app.chat_pane.right() as i32 - x).max(0) as u16), room));
+}
+
+/// The wheel goes to an agent that asked for mouse reports, else scrolls its scrollback.
+fn wheel_chat(app: &mut App, ev: MouseEvent, d: isize) {
+    let c = app.chat_pane;
+    let Some(s) = app.chat.as_mut().and_then(|c| c.session.as_mut()) else { return };
+    match s.wheel_bytes(d < 0, ev.column - c.x, ev.row - c.y) {
+        Some(b) => {
+            s.write(&b);
+        }
+        None => s.scroll_by(-d * WHEEL_LINES),
+    }
 }

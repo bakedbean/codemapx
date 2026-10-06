@@ -1,6 +1,7 @@
 //! Terminal view of a merged map.
 
 pub mod app;
+pub mod chat;
 mod diff_pane;
 mod fns_pane;
 pub mod keys;
@@ -9,12 +10,12 @@ pub mod map_pane;
 mod minimap;
 pub mod mouse;
 
-use std::{env, io, path::Path, process::Command};
+use std::{env, io, path::Path, process::Command, time::{Duration, Instant}};
 
 use ratatui::{
     backend::TestBackend,
     crossterm::{
-        event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind},
+        event::{self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event, KeyEventKind},
         execute,
     },
     prelude::*,
@@ -100,8 +101,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
     app.fns_pane = Rect::default();
     app.minimap = Rect::default();
+    app.chat_pane = Rect::default();
     if area.width < map_pane::MIN_WIDTH {
-        if app.focus == Pane::Functions {
+        if matches!(app.focus, Pane::Functions | Pane::Chat) {
             app.focus = Pane::Diff;
         }
         f.render_widget(Paragraph::new(Span::styled("terminal too narrow (need 100)", Style::default().fg(DIM))), area);
@@ -132,12 +134,15 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         link_panes::draw(f, app, rows[3]);
     }
     let row = rows[4];
-    let mm_w = if app.show_minimap { minimap::width(app.minimap_width, row.width) } else { 0 };
-    let fns_w = if app.show_fns && area.width >= fns_pane::MIN_TERM_WIDTH { fns_pane::width(app.fns_width, row.width - mm_w) } else { 0 };
+    let fns_on = app.show_fns && area.width >= fns_pane::MIN_TERM_WIDTH;
+    let reserve = (if app.show_chat { chat::MIN_WIDTH } else { 0 }) + (if fns_on { fns_pane::MIN_WIDTH } else { 0 });
+    let mm_w = if app.show_minimap { minimap::width(app.minimap_width, row.width.saturating_sub(reserve)) } else { 0 };
+    let chat_w = if app.show_chat { chat::width(app.chat_width, chat::room(row.width, mm_w, fns_on)) } else { 0 };
+    let fns_w = if fns_on { fns_pane::width(app.fns_width, row.width - mm_w - chat_w) } else { 0 };
     if fns_w == 0 && app.focus == Pane::Functions {
         app.focus = Pane::Diff;
     }
-    let [fns, diff, mm] = Layout::horizontal([Constraint::Length(fns_w), Constraint::Min(0), Constraint::Length(mm_w)]).areas(row);
+    let [fns, diff, chat_area, mm] = Layout::horizontal([Constraint::Length(fns_w), Constraint::Min(0), Constraint::Length(chat_w), Constraint::Length(mm_w)]).areas(row);
     if fns_w > 0 {
         app.fns_pane = fns;
         fns_pane::draw(f, app, fns);
@@ -146,9 +151,13 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         app.minimap = mm;
         minimap::draw(f, app, mm, diff.height.saturating_sub(2) as usize);
     }
+    if chat_w > 0 {
+        app.chat_pane = chat_area;
+        chat::draw(f, app, chat_area);
+    }
     diff_pane::draw(f, app, diff);
     let help = app.flash.clone().unwrap_or_else(|| {
-        " ←/→ step  tab pane  ↑/↓ move  h/l col  c fold  ⏎ follow  o open  d full  f fns  m minimap  J/K page  t tests  q quit".into()
+        " ←/→ step  tab pane  ↑/↓ move  h/l col  c fold  ⏎ follow  o open  d full  f fns  m minimap  a chat  J/K page  t tests  q quit".into()
     });
     f.render_widget(Paragraph::new(Span::styled(help, Style::default().fg(DIM))), rows[5]);
 }
@@ -212,31 +221,63 @@ pub fn run(app: &mut App) -> io::Result<()> {
     res
 }
 
-/// Mouse capture is for border drags and wheel-scrolling the panes; terminals still select text with shift/option-drag.
+/// Mouse capture is for border drags and wheel-scrolling the panes; terminals still select text with shift/option-drag. Bracketed paste lets a paste reach the chat agent whole.
 fn init() -> io::Result<ratatui::DefaultTerminal> {
     let term = ratatui::init();
-    execute!(io::stdout(), EnableMouseCapture)?;
+    execute!(io::stdout(), EnableMouseCapture, EnableBracketedPaste)?;
     Ok(term)
 }
 
 fn restore() {
-    let _ = execute!(io::stdout(), DisableMouseCapture);
+    let _ = execute!(io::stdout(), DisableBracketedPaste, DisableMouseCapture);
     ratatui::restore();
 }
 
+/// Blocks on input until an agent is running; then polls every 16 ms and redraws only on input or agent output.
 fn event_loop(term: &mut ratatui::DefaultTerminal, app: &mut App) -> io::Result<()> {
+    let mut dirty = true;
+    // Whether the last pass saw a live agent, so the pass after it exits draws the exit before input blocks.
+    let mut was_live = false;
     loop {
-        term.draw(|f| draw(f, app))?;
+        if dirty {
+            term.draw(|f| draw(f, app))?;
+        }
+        dirty = true;
+        let focused = app.focus == Pane::Chat;
+        let shown = app.chat_pane.width > 0;
+        if let Some(c) = app.chat.as_mut().filter(|c| c.live()) {
+            c.tick(Instant::now(), focused);
+            let woke = c.drain_wake();
+            was_live = true;
+            if !event::poll(Duration::from_millis(16))? {
+                dirty = woke && shown;
+                continue;
+            }
+        } else if was_live {
+            was_live = false;
+            continue;
+        }
         let key = match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => key,
             Event::Mouse(m) => {
                 mouse::handle(app, m);
                 continue;
             }
+            Event::Paste(s) => {
+                keys::paste(app, &s);
+                continue;
+            }
             _ => continue,
         };
         match keys::handle(app, key) {
             Action::Quit => return Ok(()),
+            Action::StartChat => {
+                // Draw first so the panel's size is known.
+                term.draw(|f| draw(f, app))?;
+                chat::start(app);
+                // A fast agent can exit before any pass sees it live; arm the exit redraw now.
+                was_live = app.chat.as_ref().is_some_and(|c| c.session.is_some());
+            }
             Action::Open(path, line) => {
                 restore();
                 let (t, e) = (env::var("CODEMAPX_EDITOR").ok(), env::var("EDITOR").ok());
