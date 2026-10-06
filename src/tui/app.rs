@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use ratatui::{layout::Rect, widgets::ListState};
 
+use super::chat::{Chat, agent::AgentKind};
 use super::map_pane::{self, ColumnView};
 use crate::{
     diff::{hunk_first, hunk_start},
@@ -19,8 +20,9 @@ pub enum Pane {
     To,
     Functions,
     Diff,
+    Chat,
 }
-pub const PANES: [Pane; 6] = [Pane::Map, Pane::From, Pane::Inside, Pane::To, Pane::Functions, Pane::Diff];
+pub const PANES: [Pane; 7] = [Pane::Map, Pane::From, Pane::Inside, Pane::To, Pane::Functions, Pane::Diff, Pane::Chat];
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Kind {
@@ -82,16 +84,27 @@ pub struct App {
     pub minimap: Rect,
     /// Minimap width set by dragging its border; None uses the default.
     pub minimap_width: Option<u16>,
+    /// `a` shows or hides the agent chat beside the diff.
+    pub show_chat: bool,
+    /// The chat panel as last drawn (empty when hidden).
+    pub chat_pane: Rect,
+    /// Chat width set by dragging its border; None uses the default.
+    pub chat_width: Option<u16>,
+    /// Made the first time the chat is shown; holds the agent until quit.
+    pub chat: Option<Chat>,
+    /// The map's state dir, so the chat briefing can point at facts.json and annotations.json.
+    pub map_dir: Option<PathBuf>,
     /// The border being dragged, and the grab row's offset from it.
     pub drag: Option<(Divider, i32)>,
 }
 
-/// A draggable border: above the middle row, above the diff, or between the diff and the panel on either side of it.
+/// A draggable border: above the middle row, above the diff, or between the diff and a panel beside it.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Divider {
     MapMid,
     MidDiff,
     FnsDiff,
+    DiffChat,
     DiffMinimap,
 }
 
@@ -126,6 +139,11 @@ impl App {
             show_minimap: true,
             minimap: Rect::default(),
             minimap_width: None,
+            show_chat: false,
+            chat_pane: Rect::default(),
+            chat_width: None,
+            chat: None,
+            map_dir: None,
             drag: None,
         };
         app.select(first);
@@ -265,6 +283,7 @@ impl App {
                 }
             }
             Pane::Diff => self.scroll_by(d),
+            Pane::Chat => {}
         }
     }
 
@@ -318,6 +337,20 @@ impl App {
         }
     }
 
+    /// `a`: shows and focuses the chat, or hides it (focusing the diff if it had focus); true when an agent should start.
+    pub fn toggle_chat(&mut self) -> bool {
+        self.show_chat = !self.show_chat;
+        if !self.show_chat {
+            if self.focus == Pane::Chat {
+                self.focus = Pane::Diff;
+            }
+            return false;
+        }
+        self.focus = Pane::Chat;
+        let chat = self.chat.get_or_insert_with(|| Chat::new(AgentKind::from_env(std::env::var("CODEMAPX_AGENT").ok().as_deref()).unwrap_or(AgentKind::Claude)));
+        chat.session.is_none() && chat.error.is_none()
+    }
+
     pub fn scroll_by(&mut self, d: isize) {
         let max = self.lines.len().saturating_sub(1) as isize;
         self.scroll = (self.scroll as isize + d).clamp(0, max) as usize;
@@ -333,7 +366,7 @@ impl App {
                 }
             }
             Pane::Inside | Pane::Functions => self.focus = Pane::Diff,
-            Pane::Map | Pane::Diff => {}
+            Pane::Map | Pane::Diff | Pane::Chat => {}
         }
     }
 

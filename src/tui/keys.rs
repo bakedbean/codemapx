@@ -4,16 +4,23 @@ use std::path::PathBuf;
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::app::{App, PANES, Pane};
+use super::{app::{App, PANES, Pane}, chat};
 
 pub enum Action {
     None,
     Quit,
     Open(PathBuf, usize),
+    /// Start (or restart) the chat agent once the panel has been drawn at its size.
+    StartChat,
 }
 
 pub fn handle(app: &mut App, key: KeyEvent) -> Action {
     app.flash = None;
+    if app.focus == Pane::Chat {
+        if let Some(a) = chat_key(app, key) {
+            return a;
+        }
+    }
     match key.code {
         KeyCode::Char('q') => return Action::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return Action::Quit,
@@ -36,6 +43,11 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('d') => app.diff_full = !app.diff_full,
         KeyCode::Char('f') => app.toggle_fns(),
         KeyCode::Char('m') => app.show_minimap = !app.show_minimap,
+        KeyCode::Char('a') => {
+            if app.toggle_chat() {
+                return Action::StartChat;
+            }
+        }
         KeyCode::Char('o') => match app.editor_target() {
             Some((path, line)) => return Action::Open(path, line),
             None => app.flash = Some(" Nothing to open here.".into()),
@@ -45,14 +57,31 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Action {
     Action::None
 }
 
-/// Moves focus `by` panes forward, skipping the functions panel when it isn't on screen.
+/// Moves focus `by` panes forward, skipping the functions and chat panels when they aren't on screen.
 fn cycle(app: &mut App, by: usize) {
     let mut p = PANES.iter().position(|p| *p == app.focus).unwrap_or(0);
     loop {
         p = (p + by) % PANES.len();
-        if PANES[p] != Pane::Functions || app.fns_pane.width > 0 {
+        let hidden = (PANES[p] == Pane::Functions && app.fns_pane.width == 0) || (PANES[p] == Pane::Chat && app.chat_pane.width == 0);
+        if !hidden {
             break;
         }
     }
     app.focus = PANES[p];
+}
+
+/// The focused chat sends a live agent every key but ctrl-x; with no agent, ⏎ starts one and other keys fall through (None).
+fn chat_key(app: &mut App, key: KeyEvent) -> Option<Action> {
+    if key.code == KeyCode::Char('x') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        app.focus = Pane::Diff;
+        return Some(Action::None);
+    }
+    match app.chat.as_mut() {
+        Some(c) if c.live() => {
+            c.write(&chat::keys::encode_key(key));
+            Some(Action::None)
+        }
+        _ if key.code == KeyCode::Enter => Some(Action::StartChat),
+        _ => None,
+    }
 }

@@ -1,7 +1,8 @@
 mod common;
 
-use std::{path::Path, sync::mpsc, time::{Duration, Instant}};
+use std::{path::{Path, PathBuf}, sync::mpsc, time::{Duration, Instant}};
 
+use codemapx::tui::{self, App, Pane, keys::{self, Action}};
 use codemapx::tui::chat::briefing::briefing;
 use codemapx::tui::chat::pty::{Session, settled};
 use codemapx::tui::chat::agent::{AgentKind, argv, ready};
@@ -190,4 +191,97 @@ fn wheel_reports_only_when_the_program_asks_for_mouse() {
     let s = Session::spawn(&sh("printf x; sleep 2"), Path::new("/"), 5, 20, tx).unwrap();
     assert!(wait_for(&rx, 3, || s.parser().screen().contents().contains('x')));
     assert_eq!(s.wheel_bytes(true, 3, 2), None);
+}
+
+fn app() -> App {
+    App::new(common::sample_map(), PathBuf::from("/wt"))
+}
+
+fn press(a: &mut App, code: KeyCode, m: KeyModifiers) -> Action {
+    keys::handle(a, KeyEvent::new(code, m))
+}
+
+#[test]
+fn a_shows_the_panel_focused_and_asks_for_an_agent() {
+    let mut a = app();
+    assert!(matches!(press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE), Action::StartChat));
+    assert_eq!(a.focus, Pane::Chat);
+    let frame = tui::snapshot(&mut a, 180, 50);
+    assert!(frame.contains("chat · claude · ctrl-x leaves"), "{frame}");
+    assert!(frame.contains("starting the agent"), "{frame}");
+    assert_eq!(a.chat_pane.width, 57, "40% of 180 less the 20-column minimap and the functions panel's 16-column minimum");
+    assert_eq!(a.chat_pane.right(), a.minimap.x, "sits between the diff and the minimap");
+}
+
+#[test]
+fn ctrl_x_leaves_and_a_hides() {
+    let mut a = app();
+    press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE);
+    tui::snapshot(&mut a, 180, 50);
+    press(&mut a, KeyCode::Char('x'), KeyModifiers::CONTROL);
+    assert_eq!(a.focus, Pane::Diff);
+    assert!(matches!(press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE), Action::None));
+    tui::snapshot(&mut a, 180, 50);
+    assert_eq!(a.chat_pane.width, 0);
+    // Hiding while focused hands focus to the diff.
+    press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE);
+    a.focus = Pane::Chat;
+    a.toggle_chat();
+    assert_eq!(a.focus, Pane::Diff);
+}
+
+#[test]
+fn focused_chat_without_an_agent_restarts_on_enter_and_keeps_other_keys() {
+    let mut a = app();
+    press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE);
+    assert!(matches!(press(&mut a, KeyCode::Enter, KeyModifiers::NONE), Action::StartChat));
+    assert!(matches!(press(&mut a, KeyCode::Char('q'), KeyModifiers::NONE), Action::Quit));
+}
+
+#[test]
+fn focused_chat_forwards_quit_keys() {
+    let mut a = app();
+    press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE);
+    tui::snapshot(&mut a, 180, 50);
+    let chat = a.chat.as_mut().unwrap();
+    chat.start(&sh("cat >/dev/null"), Path::new("/"), 5, 20);
+    assert!(chat.live());
+    for (code, m) in [(KeyCode::Char('q'), KeyModifiers::NONE), (KeyCode::Char('c'), KeyModifiers::CONTROL), (KeyCode::Esc, KeyModifiers::NONE), (KeyCode::Tab, KeyModifiers::NONE)] {
+        assert!(matches!(press(&mut a, code, m), Action::None), "{code:?}");
+        assert_eq!(a.focus, Pane::Chat, "{code:?}");
+    }
+}
+
+#[test]
+fn tab_reaches_the_chat_only_while_shown() {
+    let mut a = app();
+    tui::snapshot(&mut a, 180, 50);
+    a.focus = Pane::Diff;
+    press(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    assert_eq!(a.focus, Pane::Map, "hidden: diff wraps to the map");
+    a.show_chat = true;
+    tui::snapshot(&mut a, 180, 50);
+    a.focus = Pane::Diff;
+    press(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    assert_eq!(a.focus, Pane::Chat);
+}
+
+#[test]
+fn chat_width_leaves_the_diff_forty_columns() {
+    let mut a = app();
+    a.show_chat = true;
+    for w in [100u16, 120, 130, 150, 180] {
+        tui::snapshot(&mut a, w, 50);
+        let diff = a.panes[2].width - a.fns_pane.width - a.chat_pane.width - a.minimap.width;
+        assert!(a.chat_pane.width >= 40 && diff >= 40, "w={w}: chat {} diff {diff}", a.chat_pane.width);
+    }
+}
+
+#[test]
+fn chat_errors_show_in_the_panel() {
+    let mut a = app();
+    press(&mut a, KeyCode::Char('a'), KeyModifiers::NONE);
+    a.chat.as_mut().unwrap().start(&["/nope/agent".to_string()], Path::new("/"), 5, 20);
+    let frame = tui::snapshot(&mut a, 180, 50);
+    assert!(frame.contains("can't run /nope/agent"), "{frame}");
 }

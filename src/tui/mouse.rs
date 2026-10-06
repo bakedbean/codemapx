@@ -101,7 +101,7 @@ fn resize(app: &mut App, d: Divider, y: i32) {
     let (above, below) = match d {
         Divider::MapMid => (map, mid),
         Divider::MidDiff => (mid, diff),
-        Divider::FnsDiff | Divider::DiffMinimap => return,
+        Divider::FnsDiff | Divider::DiffChat | Divider::DiffMinimap => return,
     };
     let total = above.height + below.height;
     let h = (y - above.y as i32).clamp(MIN_ROW_H as i32, total.saturating_sub(MIN_ROW_H).max(MIN_ROW_H) as i32) as u16;
