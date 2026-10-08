@@ -1,7 +1,7 @@
 use ratatui::{prelude::*, widgets::Paragraph};
 use unicode_width::UnicodeWidthStr;
 
-use super::{AMBER, BLUE, DIM, FAINT, GREEN, RED, SEL_BG, app::{App, Pane, Rel}, pane_block, trunc, trunc_left};
+use super::{AMBER, BLUE, DIM, FAINT, GREEN, MAP_SEL_BG, RED, app::{App, Pane, Rel}, pane_block, trunc, trunc_left};
 use crate::map::CardKind;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -114,20 +114,29 @@ pub(super) fn card_line(app: &App, i: usize, w: usize) -> Line<'static> {
         CardKind::Changed if card.del > 0 => format!("+{} −{}", card.add, card.del),
         CardKind::Changed => format!("+{}", card.add),
     };
-    let name = trunc_left(&card.name, w.saturating_sub(2 + stats.width() + 1));
-    let pad = w.saturating_sub(2 + name.width() + stats.width());
+    // Trail position, so the ←/→ order shows on the map; blank for cards off the trail.
+    let digits = app.map.trail.len().to_string().len();
+    let step = match app.map.trail.iter().position(|&t| t == i) {
+        Some(p) => format!("{:>digits$} ", p + 1),
+        None => " ".repeat(digits + 1),
+    };
+    let lead = step.width() + 2;
+    let name = trunc_left(&card.name, w.saturating_sub(lead + stats.width() + 1));
+    let pad = w.saturating_sub(lead + name.width() + stats.width());
     let mut name_style = Style::default().fg(color);
     if ghost {
         name_style = name_style.italic();
     }
     let mut row_style = Style::default();
+    let mut step_style = Style::default().fg(FAINT);
     if i == app.cur {
         name_style = name_style.bold();
-        row_style = row_style.bg(SEL_BG);
+        step_style = step_style.fg(Color::White).bold();
+        row_style = row_style.bg(MAP_SEL_BG);
     }
     let unrelated = matches!(rel, Rel::None);
     let stat_style = |c: Color| Style::default().fg(if unrelated { FAINT } else { c });
-    let mut spans = vec![Span::styled(marker, Style::default().fg(color)), Span::styled(name, name_style), Span::raw(" ".repeat(pad))];
+    let mut spans = vec![Span::styled(step, step_style), Span::styled(marker, Style::default().fg(color)), Span::styled(name, name_style), Span::raw(" ".repeat(pad))];
     if ghost {
         spans.push(Span::styled(stats, stat_style(DIM)));
     } else if let Some((a, d)) = stats.split_once(' ') {

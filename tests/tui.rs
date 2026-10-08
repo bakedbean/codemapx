@@ -31,6 +31,36 @@ fn starts_at_first_trail_step_and_steps_in_order() {
 }
 
 #[test]
+fn map_cards_show_their_trail_step_and_the_selection_stands_out() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    let frame = tui::snapshot(&mut a, 180, 52);
+    for needle in ["1 ◂ types.ts", "3 ▶ apply.ts", "4 ◂ fee-writer.ts", "5 ▸ route.ts", "  Enqueue regeneration"] {
+        assert!(frame.contains(needle), "missing {needle:?}\n{frame}");
+    }
+    let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(180, 52)).unwrap();
+    term.draw(|f| tui::draw(f, &mut a)).unwrap();
+    let buf = term.backend().buffer();
+    let y = (0..52).find(|&y| (0..180).map(|x| buf[(x, y)].symbol()).collect::<String>().contains("▶ apply.ts")).unwrap();
+    let x = (0..180).find(|&x| buf[(x, y)].symbol() == "▶").unwrap();
+    for dx in [-2, 0, 2, 10] {
+        assert_eq!(buf[((x as i32 + dx) as u16, y)].bg, tui::MAP_SEL_BG, "offset {dx}");
+    }
+}
+
+#[test]
+fn trail_steps_past_nine_stay_aligned() {
+    let mut a = app();
+    let missing = a.map.card_index("enqueue").unwrap();
+    a.map.trail.push(missing);
+    at(&mut a, "src/billing/apply.ts");
+    let frame = tui::snapshot(&mut a, 180, 52);
+    for needle in [" 1 ◂ types.ts", " 3 ▶ apply.ts", " 6   legacy.ts", "10   Enqueue regeneration"] {
+        assert!(frame.contains(needle), "missing {needle:?}\n{frame}");
+    }
+}
+
+#[test]
 fn came_from_and_leads_to_for_apply() {
     let mut a = app();
     at(&mut a, "src/billing/apply.ts");
