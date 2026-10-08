@@ -4,9 +4,10 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     process::Command,
+    time::{Duration, UNIX_EPOCH},
 };
 
-use crate::facts::Status;
+use crate::{facts::Status, store::Former};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Change {
@@ -49,10 +50,17 @@ impl Git {
     }
 
     /// Names `branch` had before `git branch -m`, newest first, read from its reflog (which a rename carries along).
-    pub fn former_names(&self, branch: &str) -> Vec<String> {
-        let out = self.git(&["reflog", "show", "--format=%gs", &format!("refs/heads/{branch}"), "--"]).unwrap_or_default();
+    /// Best effort: with no reflog (expired, disabled, or the branch was recreated) there are none.
+    pub fn former_names(&self, branch: &str) -> Vec<Former> {
+        let out = self.git(&["reflog", "show", "--date=unix", "--format=%gd%x09%gs", &format!("refs/heads/{branch}"), "--"]).unwrap_or_default();
         out.lines()
-            .filter_map(|l| l.strip_prefix("Branch: renamed refs/heads/")?.split_once(" to refs/heads/").map(|(from, _)| from.to_string()))
+            .filter_map(|l| {
+                let (selector, subject) = l.split_once('\t')?;
+                let secs: u64 = selector.rsplit_once("@{")?.1.strip_suffix('}')?.parse().ok()?;
+                let (from, _) = subject.strip_prefix("Branch: renamed refs/heads/")?.split_once(" to refs/heads/")?;
+                // The reflog keeps whole seconds; round up so maps saved just before the rename count.
+                Some(Former { name: from.to_string(), until: UNIX_EPOCH + Duration::from_secs(secs + 1) })
+            })
             .collect()
     }
 

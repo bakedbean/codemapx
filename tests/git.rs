@@ -66,7 +66,11 @@ fn former_names_follow_renames_newest_first() {
     assert!(g.former_names("feature/12-apply-fees").is_empty());
     common::git_out(&s.root, &["branch", "-m", "a/first"]);
     common::git_out(&s.root, &["branch", "-m", "b/second"]);
-    assert_eq!(g.former_names("b/second"), ["a/first", "feature/12-apply-fees"]);
+    let names: Vec<String> = g.former_names("b/second").into_iter().map(|f| f.name).collect();
+    assert_eq!(names, ["a/first", "feature/12-apply-fees"]);
+    // The sample pins GIT_COMMITTER_DATE to 2026-01-01T00:00:00Z; until rounds it up a second.
+    let until = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_767_225_601);
+    assert!(g.former_names("b/second").iter().all(|f| f.until == until));
     assert!(g.former_names("no/such-branch").is_empty());
 }
 
