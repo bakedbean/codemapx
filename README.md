@@ -25,7 +25,7 @@ To review someone else's pull request, run `/codemapx <pr number or url>` in a f
 | `codemapx` / `codemapx view` | opens the TUI |
 | `codemapx html -o FILE` | writes a self-contained HTML page |
 
-Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAPX_STATE_DIR` to move them.
+Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAPX_STATE_DIR` to move them. Renaming the branch with `git branch -m` keeps its maps: lookups follow the renames recorded in the branch's reflog.
 
 ## Keys
 

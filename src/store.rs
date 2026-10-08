@@ -1,4 +1,5 @@
 //! Where maps live: `<root>/<repo>/<branch with / → __>/<head-sha>/{facts,annotations}.json`.
+//! Lookups also search the dirs of the branch's former names, so a renamed branch keeps its maps.
 
 use std::{
     env,
@@ -31,10 +32,11 @@ pub fn branch_dir(root: &Path, repo: &str, branch: &str) -> PathBuf {
 
 /// Writes facts.json; a new head dir inherits the newest earlier annotations.json for the agent to update,
 /// with candidate ids remapped by (from, to) since ids are positional. Vanished pairs become `gone:<from>-><to>`.
-pub fn save_facts(root: &Path, facts: &Facts) -> io::Result<PathBuf> {
-    let bdir = branch_dir(root, &facts.repo, &facts.branch);
-    let dir = bdir.join(&facts.head);
-    let prev = newest(&bdir, |p| *p != dir && p.join("annotations.json").exists());
+/// `former` are the branch's earlier names, whose maps count as earlier maps of this branch.
+pub fn save_facts(root: &Path, facts: &Facts, former: &[String]) -> io::Result<PathBuf> {
+    let dir = branch_dir(root, &facts.repo, &facts.branch).join(&facts.head);
+    let dirs = branch_dirs(root, &facts.repo, &facts.branch, former);
+    let prev = newest(&dirs, |p| *p != dir && p.join("annotations.json").exists());
     fs::create_dir_all(&dir)?;
     fs::write(dir.join("facts.json"), facts::to_json(facts))?;
     let ann = dir.join("annotations.json");
@@ -43,6 +45,10 @@ pub fn save_facts(root: &Path, facts: &Facts) -> io::Result<PathBuf> {
         fs::write(&ann, carry(&prev, &text, facts).unwrap_or(text))?;
     }
     Ok(dir)
+}
+
+fn branch_dirs(root: &Path, repo: &str, branch: &str, former: &[String]) -> Vec<PathBuf> {
+    std::iter::once(branch).chain(former.iter().map(String::as_str)).map(|b| branch_dir(root, repo, b)).collect()
 }
 
 // None when nothing needs rewriting (or the old files don't parse), so the text is copied as is.
@@ -67,14 +73,11 @@ fn carry(prev: &Path, text: &str, facts: &Facts) -> Option<String> {
     changed.then(|| serde_json::to_string_pretty(&ann).ok().map(|s| s + "\n")).flatten()
 }
 
-pub fn newest_map(branch_dir: &Path) -> Option<PathBuf> {
-    newest(branch_dir, |_| true)
-}
-
-// Newest map dir (by facts.json mtime) that `keep` accepts.
-fn newest(branch_dir: &Path, keep: impl Fn(&PathBuf) -> bool) -> Option<PathBuf> {
-    fs::read_dir(branch_dir)
-        .ok()?
+// Newest map dir (by facts.json mtime) across `dirs` that `keep` accepts.
+fn newest(dirs: &[PathBuf], keep: impl Fn(&PathBuf) -> bool) -> Option<PathBuf> {
+    dirs.iter()
+        .filter_map(|d| fs::read_dir(d).ok())
+        .flatten()
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| keep(p))
         .filter_map(|p| Some((fs::metadata(p.join("facts.json")).ok()?.modified().ok()?, p)))
@@ -82,26 +85,29 @@ fn newest(branch_dir: &Path, keep: impl Fn(&PathBuf) -> bool) -> Option<PathBuf>
         .map(|(_, p)| p)
 }
 
+fn exact_map(dirs: &[PathBuf], head: &str) -> Option<PathBuf> {
+    dirs.iter().map(|d| d.join(head)).find(|e| e.join("facts.json").exists())
+}
+
 /// The map view/html show: prefer a finished map (annotations written for its own head), then any
 /// annotated map, exact HEAD first each time; else the exact/newest dir so load reports what's missing.
-pub fn find_map(root: &Path, repo: &str, branch: &str, head: &str) -> Option<PathBuf> {
-    let b = branch_dir(root, repo, branch);
-    let exact = Some(b.join(head)).filter(|e| e.join("facts.json").exists());
+pub fn find_map(root: &Path, repo: &str, branch: &str, former: &[String], head: &str) -> Option<PathBuf> {
+    let dirs = branch_dirs(root, repo, branch, former);
+    let exact = exact_map(&dirs, head);
     for want in [Ann::Finished, Ann::Carried] {
         if let Some(e) = exact.as_ref().filter(|e| ann_state(e) == want) {
             return Some(e.clone());
         }
-        if let Some(d) = newest(&b, |p| ann_state(p) == want) {
+        if let Some(d) = newest(&dirs, |p| ann_state(p) == want) {
             return Some(d);
         }
     }
-    exact.or_else(|| newest_map(&b))
+    exact.or_else(|| newest(&dirs, |_| true))
 }
 
 /// validate checks the exact-HEAD map when there is one, so the agent's loop sees its own edits.
-pub fn find_map_for_validate(root: &Path, repo: &str, branch: &str, head: &str) -> Option<PathBuf> {
-    let exact = branch_dir(root, repo, branch).join(head);
-    if exact.join("facts.json").exists() { Some(exact) } else { find_map(root, repo, branch, head) }
+pub fn find_map_for_validate(root: &Path, repo: &str, branch: &str, former: &[String], head: &str) -> Option<PathBuf> {
+    exact_map(&branch_dirs(root, repo, branch, former), head).or_else(|| find_map(root, repo, branch, former, head))
 }
 
 #[derive(PartialEq)]

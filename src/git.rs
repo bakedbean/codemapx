@@ -48,6 +48,14 @@ impl Git {
         Ok(b)
     }
 
+    /// Names `branch` had before `git branch -m`, newest first, read from its reflog (which a rename carries along).
+    pub fn former_names(&self, branch: &str) -> Vec<String> {
+        let out = self.git(&["reflog", "show", "--format=%gs", &format!("refs/heads/{branch}"), "--"]).unwrap_or_default();
+        out.lines()
+            .filter_map(|l| l.strip_prefix("Branch: renamed refs/heads/")?.split_once(" to refs/heads/").map(|(from, _)| from.to_string()))
+            .collect()
+    }
+
     /// Basename of the main checkout, shared by all of a repo's worktrees.
     pub fn repo_name(&self) -> Result<String, String> {
         let common = self.git(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
