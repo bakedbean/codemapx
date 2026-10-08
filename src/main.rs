@@ -64,14 +64,14 @@ fn open(path: Option<PathBuf>) -> Result<Git, String> {
 }
 
 fn cmd_collect(path: Option<PathBuf>, base: Option<&str>) -> ExitCode {
-    let facts = match open(path).and_then(|g| collect(&g, base)) {
-        Ok(f) => f,
+    let (facts, former) = match open(path).and_then(|g| collect(&g, base).map(|f| (g.former_names(&f.branch), f))) {
+        Ok((former, facts)) => (facts, former),
         Err(e) => return fail(2, e),
     };
     for w in &facts.warnings {
         eprintln!("warning: {w}");
     }
-    match store::save_facts(&store::state_root(), &facts) {
+    match store::save_facts(&store::state_root(), &facts, &former) {
         Ok(dir) => {
             println!("{}", dir.display());
             ExitCode::SUCCESS

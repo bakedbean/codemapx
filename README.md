@@ -16,7 +16,7 @@ ln -s "$PWD/skill/codemapx" ~/.claude/skills/codemapx
 1. When an agent finishes a branch, run `/codemapx` in its session. It runs `codemapx collect`, writes the annotations and validates them.
 2. Run `codemapx` in the worktree to open the map. Use `codemapx html -o map.html` to get a page you can share.
 
-To review someone else's pull request, run `/codemapx <pr number or url>` in a fresh workspace. The skill checks the PR out onto the workspace's branch with `gh pr checkout`, maps it against the PR's base, and says where the PR doesn't explain an edit. Run it again to pick up new pushes. It asks first if checkout would discard commits on the branch.
+To review someone else's pull request, run `/codemapx <pr number or url>` in a fresh workspace. The skill resets the worktree's current branch to the PR's head (whatever the branch is called; it never creates or renames one), maps it against the PR's base, and says where the PR doesn't explain an edit. Run it again to pick up new pushes. It asks first if the reset would discard commits on the branch.
 
 | Command | Does |
 |---|---|
@@ -25,7 +25,7 @@ To review someone else's pull request, run `/codemapx <pr number or url>` in a f
 | `codemapx` / `codemapx view` | opens the TUI |
 | `codemapx html -o FILE` | writes a self-contained HTML page |
 
-Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAPX_STATE_DIR` to move them.
+Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAPX_STATE_DIR` to move them. Renaming the branch with `git branch -m` keeps its maps: lookups follow the renames recorded in the branch's reflog, taking only maps saved under an old name before the rename. Once that reflog expires, or if the branch is deleted and recreated, maps under its old names are no longer found.
 
 ## Keys
 

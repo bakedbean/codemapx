@@ -22,7 +22,7 @@ pub struct Loaded {
 pub fn load(git: &Git, for_validate: bool) -> Result<Loaded, String> {
     let (repo, branch, head) = (git.repo_name()?, git.branch()?, git.head()?);
     let find = if for_validate { store::find_map_for_validate } else { store::find_map };
-    let dir = find(&store::state_root(), &repo, &branch, &head).ok_or_else(|| format!("no map for {branch}; {NO_MAP}"))?;
+    let dir = find(&store::state_root(), &repo, &branch, &git.former_names(&branch), &head).ok_or_else(|| format!("no map for {branch}; {NO_MAP}"))?;
     let facts_text = fs::read_to_string(dir.join("facts.json")).map_err(|e| format!("{}: {e}", dir.join("facts.json").display()))?;
     let facts: Facts = serde_json::from_str(&facts_text).map_err(|e| format!("facts.json: {e}"))?;
     let text = fs::read_to_string(dir.join("annotations.json")).map_err(|_| format!("{}: no annotations.json; {NO_MAP}", dir.display()))?;
