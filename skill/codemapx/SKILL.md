@@ -1,11 +1,13 @@
 ---
 name: codemapx
-description: Use when the work on a branch is finished and the user wants to review it as a map (they run /codemapx). Collects facts about the branch, writes annotations.json explaining how the changes connect, and validates it so `codemapx` can show it.
+description: Use when the work on a branch is finished and the user wants to review it as a map (they run /codemapx), or when they want to review someone's pull request as a map (they run /codemapx <pr number or url>). Collects facts about the branch, writes annotations.json explaining how the changes connect, and validates it so `codemapx` can show it.
 ---
 
 # codemapx: map this branch for review
 
 You wrote the code on this branch, so you know why each edit was needed. The user doesn't, and they're about to review it. Your job is to explain how the changes connect. Code supplies the facts: files, diffs, line numbers, candidate links. You supply the judgement and the prose.
+
+If the user passed a PR number or URL, follow **Reviewing a pull request** below instead of step 1, then continue from step 2.
 
 ## Steps
 
@@ -15,6 +17,16 @@ You wrote the code on this branch, so you know why each edit was needed. The use
 4. Write `<dir>/annotations.json` (format below).
 5. Run `codemapx validate`. Fix every problem it lists and run it again until it prints `0 problem(s)`. **Never edit `facts.json`.**
 6. Tell the user: "Map ready: run `codemapx`." Mention `codemapx html -o map.html` if they want to share it.
+
+## Reviewing a pull request
+
+Here someone else wrote the code, so you don't know why each edit was needed. Work it out from the PR title and body, the commit messages, linked issues, and the code itself. Where the reason isn't clear, say so in the `what` or `reason` (e.g. "Unclear why this was needed; the PR doesn't say.") rather than guessing. Those gaps are useful to the reviewer.
+
+1. Read the PR: `gh pr view <pr> --json number,title,body,baseRefName,headRefName,state,url,closingIssuesReferences`. If the URL names a different repo from this worktree's (`gh repo view --json nameWithOwner`), stop and tell the user. If the PR is merged, tell the user the map would be empty and stop.
+2. Check that the worktree is safe to overwrite. `git status --porcelain` must be empty. Then run `git fetch origin <baseRefName> "pull/<number>/head"` and `git log --oneline HEAD --not "origin/<baseRefName>" FETCH_HEAD`. If that lists commits, they exist only on this branch and checkout would discard them, so show them to the user and ask before going on. A PR that was force-pushed since the last checkout also shows up here, as its old commits.
+3. Check the PR out onto the workspace's current branch: `gh pr checkout <number> --branch "$(git branch --show-current)" --force`. Keeping the branch name keeps wsx's registry correct, and it works even when the PR's own branch is checked out in another worktree. Rerun this step to pick up new pushes.
+4. Continue from step 2 of **Steps**, passing `--base "origin/<baseRefName>"` to `codemapx collect`. Don't commit anything.
+5. For `context`, include the unchanged files you read to understand the PR. Use `missing` for anything the PR references that doesn't exist.
 
 ## What to write
 
