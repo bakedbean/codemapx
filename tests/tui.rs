@@ -43,7 +43,21 @@ fn map_cards_show_their_trail_step_and_the_selection_stands_out() {
     let buf = term.backend().buffer();
     let y = (0..52).find(|&y| (0..180).map(|x| buf[(x, y)].symbol()).collect::<String>().contains("▶ apply.ts")).unwrap();
     let x = (0..180).find(|&x| buf[(x, y)].symbol() == "▶").unwrap();
-    assert_eq!(buf[(x, y)].bg, tui::MAP_SEL_BG);
+    for dx in [-2, 0, 2, 10] {
+        assert_eq!(buf[((x as i32 + dx) as u16, y)].bg, tui::MAP_SEL_BG, "offset {dx}");
+    }
+}
+
+#[test]
+fn trail_steps_past_nine_stay_aligned() {
+    let mut a = app();
+    let missing = a.map.card_index("enqueue").unwrap();
+    a.map.trail.push(missing);
+    at(&mut a, "src/billing/apply.ts");
+    let frame = tui::snapshot(&mut a, 180, 52);
+    for needle in [" 1 ◂ types.ts", " 3 ▶ apply.ts", " 6   legacy.ts", "10   Enqueue regeneration"] {
+        assert!(frame.contains(needle), "missing {needle:?}\n{frame}");
+    }
 }
 
 #[test]
