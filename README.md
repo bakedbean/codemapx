@@ -31,7 +31,7 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 
 | Key | Action |
 |---|---|
-| `←` `→` | step through the edits in reading order |
+| `←` `→` | step through the edits in reading order (the numbers beside the map's cards; amber `◂` cards feed the selected one, blue `▸` cards follow from it) |
 | `tab` | move between panes |
 | `↑` `↓` | move within the focused pane (in the map, within the current column) |
 | `h` `l` | map pane: move to the next column left or right (reaches context cards, which are off the trail) |

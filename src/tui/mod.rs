@@ -37,6 +37,8 @@ pub(crate) const DIM: Color = Color::Rgb(130, 138, 152);
 pub(crate) const FAINT: Color = Color::Rgb(98, 105, 120);
 pub(crate) const SEL_BG: Color = Color::Rgb(38, 44, 58);
 pub(crate) const HL_BG: Color = Color::Rgb(48, 58, 92);
+/// The map's selected card: brighter than `SEL_BG` so it outranks the amber/blue related cards.
+pub const MAP_SEL_BG: Color = Color::Rgb(72, 86, 124);
 
 pub(crate) fn wrap(text: &str, width: usize) -> Vec<String> {
     let width = width.max(8);
