@@ -49,7 +49,7 @@ fn collapsed_lines(app: &App, col: &crate::map::MapColumn, w: usize) -> Vec<Line
     lines
 }
 
-pub(super) fn draw(f: &mut Frame, app: &App, area: Rect) {
+pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
     let block = pane_block(Line::from(" map "), app.focus == Pane::Map);
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -70,6 +70,10 @@ pub(super) fn draw(f: &mut Frame, app: &App, area: Rect) {
                 let hint = |t: String| Line::from(Span::styled(t, Style::default().fg(DIM)));
                 if start > 0 {
                     l.push(hint(format!("↑ {start} more")));
+                }
+                for (k, &i) in col.cards[start..end].iter().enumerate() {
+                    let y = cols[c].y + l.len() as u16 + k as u16;
+                    app.hits.push((Rect { y, height: 1, ..cols[c] }, Pane::Map, i));
                 }
                 l.extend(col.cards[start..end].iter().map(|&i| card_line(app, i, w)));
                 if end < col.cards.len() {

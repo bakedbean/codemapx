@@ -99,11 +99,25 @@ pub(crate) fn pane_block(title: Line<'static>, focused: bool) -> Block<'static> 
         .title(title)
 }
 
+/// Records a click target for each list item drawn in `area` from `offset` on, given every item's height.
+pub(crate) fn list_hits(app: &mut App, pane: Pane, area: Rect, offset: usize, heights: &[usize]) {
+    let mut y = area.y;
+    for (i, &h) in heights.iter().enumerate().skip(offset) {
+        if y >= area.bottom() {
+            break;
+        }
+        let h = (h as u16).min(area.bottom() - y);
+        app.hits.push((Rect { y, height: h, ..area }, pane, i));
+        y += h;
+    }
+}
+
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
     app.fns_pane = Rect::default();
     app.minimap = Rect::default();
     app.chat_pane = Rect::default();
+    app.hits.clear();
     if area.width < map_pane::MIN_WIDTH {
         if matches!(app.focus, Pane::Functions | Pane::Chat) {
             app.focus = Pane::Diff;
@@ -223,7 +237,7 @@ pub fn run(app: &mut App) -> io::Result<()> {
     res
 }
 
-/// Mouse capture is for border drags and wheel-scrolling the panes; terminals still select text with shift/option-drag. Bracketed paste lets a paste reach the chat agent whole.
+/// Mouse capture is for clicking items, border drags and wheel-scrolling the panes; terminals still select text with shift/option-drag. Bracketed paste lets a paste reach the chat agent whole.
 fn init() -> io::Result<ratatui::DefaultTerminal> {
     let term = ratatui::init();
     execute!(io::stdout(), EnableMouseCapture, EnableBracketedPaste)?;

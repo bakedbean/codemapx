@@ -4,7 +4,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::{DIM, FAINT, GREEN, SEL_BG, app::{App, Pane}, pane_block, trunc};
+use super::{DIM, FAINT, GREEN, SEL_BG, app::{App, Pane}, list_hits, pane_block, trunc};
 use crate::{collect::outline::lang_for, map::CardKind};
 
 /// Columns the panel takes by default, borders included.
@@ -30,6 +30,7 @@ pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         return;
     }
     let w = inner.width as usize;
+    let n = card.functions.len();
     let items: Vec<ListItem> = card
         .functions
         .iter()
@@ -52,6 +53,7 @@ pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         .block(block)
         .highlight_style(if app.focus == Pane::Functions { Style::default().bg(SEL_BG) } else { Style::default() });
     f.render_stateful_widget(list, area, &mut app.fns);
+    list_hits(app, Pane::Functions, inner, app.fns.offset(), &vec![1; n]);
 }
 
 fn empty_reason(app: &App) -> &'static str {
