@@ -4,7 +4,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::{AMBER, BLUE, DIM, FAINT, SEL_BG, app::{App, Pane}, pane_block, trunc, trunc_left, wrap};
+use super::{AMBER, BLUE, DIM, FAINT, SEL_BG, app::{App, Pane}, list_hits, pane_block, trunc, trunc_left, wrap};
 use crate::map::CardKind;
 
 fn link_items(app: &App, links: &[(usize, usize)], color: Color, width: usize) -> Vec<ListItem<'static>> {
@@ -41,11 +41,18 @@ pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
         let block = pane_block(title, app.focus == pane);
         let w = block.inner(cols[k]).width as usize;
         let links = app.links(incoming);
-        let list = List::new(link_items(app, &links, color, w))
+        let inner = block.inner(cols[k]);
+        let items = link_items(app, &links, color, w);
+        let heights: Vec<usize> = items.iter().map(|it| it.height()).collect();
+        let list = List::new(items)
             .block(block)
             .highlight_style(if app.focus == pane { Style::default().bg(SEL_BG) } else { Style::default() });
         let st = if incoming { &mut app.from } else { &mut app.to };
         f.render_stateful_widget(list, cols[k], st);
+        let offset = st.offset();
+        if !links.is_empty() {
+            list_hits(app, pane, inner, offset, &heights);
+        }
     }
 
     let card = app.card().clone();
@@ -85,5 +92,6 @@ pub(super) fn draw(f: &mut Frame, app: &mut App, area: Rect) {
             .collect();
         let list = List::new(items).highlight_style(if app.focus == Pane::Inside { Style::default().bg(SEL_BG) } else { Style::default() });
         f.render_stateful_widget(list, parts[2], &mut app.inside);
+        list_hits(app, Pane::Inside, parts[2], app.inside.offset(), &vec![1; card.outline.len()]);
     }
 }

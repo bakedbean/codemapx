@@ -701,3 +701,69 @@ fn the_minimap_colours_the_changed_rows() {
     let frac = (rows[0] - m.y - 1) as f32 / drawn as f32;
     assert!((0.65..0.8).contains(&frac), "change about 3/4 down, at {frac}");
 }
+
+fn click(app: &mut App, column: u16, row: u16) {
+    mouse_at(app, MouseEventKind::Down(MouseButton::Left), column, row);
+    mouse_at(app, MouseEventKind::Up(MouseButton::Left), column, row);
+    tui::snapshot(app, 180, 52);
+}
+
+/// Where item `i` of `pane` was last drawn.
+fn hit(app: &App, pane: Pane, i: usize) -> ratatui::layout::Rect {
+    app.hits.iter().find(|&&(_, p, k)| p == pane && k == i).map(|h| h.0).unwrap_or_else(|| panic!("{pane:?} item {i} not drawn"))
+}
+
+#[test]
+fn clicking_a_map_card_selects_it_and_focuses_the_map() {
+    let mut a = app();
+    a.focus = Pane::Diff;
+    tui::snapshot(&mut a, 180, 52);
+    let i = a.map.card_index("src/billing/apply.ts").unwrap();
+    let r = hit(&a, Pane::Map, i);
+    click(&mut a, r.x + 4, r.y);
+    assert_eq!((a.card().id.as_str(), a.focus), ("src/billing/apply.ts", Pane::Map));
+}
+
+#[test]
+fn clicking_a_link_selects_it_and_enter_follows_it() {
+    let mut a = app();
+    at(&mut a, "src/billing/apply.ts");
+    tui::snapshot(&mut a, 180, 52);
+    // A link's reason and evidence lines belong to it too.
+    let r = hit(&a, Pane::From, 1);
+    assert!(r.height > 1);
+    click(&mut a, r.x + 2, r.bottom() - 1);
+    assert_eq!((a.from.selected(), a.focus), (Some(1), Pane::From));
+    let (to, _) = a.links(true)[1];
+    key(&mut a, KeyCode::Enter);
+    assert_eq!(a.cur, to);
+}
+
+#[test]
+fn clicking_an_outline_entry_or_function_jumps_the_diff_like_keys_do() {
+    let mut a = app();
+    at(&mut a, "src/billing/mills.ts");
+    tui::snapshot(&mut a, 180, 52);
+    let r = hit(&a, Pane::Functions, 1);
+    click(&mut a, r.x + 2, r.y);
+    assert_eq!((a.fns.selected(), a.focus), (Some(1), Pane::Functions));
+    assert_eq!(a.hl.map(|h| a.lines[h].n), Some(Some(5)));
+    let r = hit(&a, Pane::Inside, 0);
+    click(&mut a, r.x + 2, r.y);
+    assert_eq!((a.inside.selected(), a.focus), (Some(0), Pane::Inside));
+    let line = a.card().outline[0].start;
+    assert_eq!(a.hl.map(|h| a.lines[h].n), Some(Some(line)));
+}
+
+#[test]
+fn clicking_a_pane_off_its_items_focuses_it() {
+    let mut a = app();
+    tui::snapshot(&mut a, 180, 52);
+    let cur = a.cur;
+    let (d, x) = (a.panes[2], a.fns_pane.right() + 10);
+    click(&mut a, x, d.y + 3);
+    assert_eq!(a.focus, Pane::Diff);
+    let [from, ..] = a.mid_panes;
+    click(&mut a, from.x + 2, from.bottom() - 2);
+    assert_eq!((a.focus, a.cur), (Pane::From, cur));
+}

@@ -1,5 +1,5 @@
 //! Dragging the borders between the map, the middle row, the diff and the panels beside it, wheel-scrolling the pane under the pointer,
-//! clicking the minimap to jump the diff, and focusing, resizing and wheeling the chat panel.
+//! clicking the minimap to jump the diff, clicking a pane or an item in it to focus and select it, and focusing, resizing and wheeling the chat panel.
 
 use ratatui::{
     crossterm::event::{MouseButton, MouseEvent, MouseEventKind},
@@ -26,6 +26,7 @@ fn dispatch(app: &mut App, ev: MouseEvent) {
             app.drag = grab(app, ev.column, ev.row);
             if app.drag.is_none() && !focus_chat(app, ev.column, ev.row) {
                 jump_minimap(app, ev.column, ev.row);
+                click(app, ev.column, ev.row);
             }
         }
         MouseEventKind::Drag(MouseButton::Left) => match app.drag {
@@ -39,6 +40,24 @@ fn dispatch(app: &mut App, ev: MouseEvent) {
         MouseEventKind::ScrollDown => wheel(app, ev, 1),
         MouseEventKind::ScrollUp => wheel(app, ev, -1),
         _ => {}
+    }
+}
+
+/// Focuses the pane under a press and selects the card or list item there, as keys reaching it would.
+fn click(app: &mut App, col: u16, row: u16) {
+    let at = Position::new(col, row);
+    if let Some(&(_, pane, i)) = app.hits.iter().find(|(r, _, _)| r.contains(at)) {
+        app.focus = pane;
+        return app.pick(pane, i);
+    }
+    let [map, _, diff] = app.panes;
+    let [from, inside, to] = app.mid_panes;
+    // The functions panel sits inside the diff row, so it is tested first.
+    let hit = [(Pane::Map, map), (Pane::From, from), (Pane::Inside, inside), (Pane::To, to), (Pane::Functions, app.fns_pane), (Pane::Diff, diff)]
+        .into_iter()
+        .find(|(_, r)| r.contains(at));
+    if let Some((p, _)) = hit {
+        app.focus = p;
     }
 }
 

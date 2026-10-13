@@ -96,6 +96,8 @@ pub struct App {
     pub map_dir: Option<PathBuf>,
     /// The border being dragged, and the grab row's offset from it.
     pub drag: Option<(Divider, i32)>,
+    /// Each visible map card and list item as last drawn, with its pane and index, so a click can select it.
+    pub hits: Vec<(Rect, Pane, usize)>,
 }
 
 /// A draggable border: above the middle row, above the diff, or between the diff and a panel beside it.
@@ -145,6 +147,7 @@ impl App {
             chat: None,
             map_dir: None,
             drag: None,
+            hits: vec![],
         };
         app.select(first);
         app
@@ -247,43 +250,57 @@ impl App {
 
     /// ↑/↓ in `pane`, focused or not: the mouse wheel moves the pane under the pointer.
     pub fn move_pane(&mut self, pane: Pane, d: isize) {
+        let step = |sel: Option<usize>, len: usize| (sel.unwrap_or(0) as isize + d).clamp(0, len as isize - 1) as usize;
         match pane {
             Pane::Map => {
                 let cards = &self.map.columns[self.card().column].cards;
-                let p = cards.iter().position(|&i| i == self.cur).unwrap_or(0) as isize;
-                let i = cards[(p + d).clamp(0, cards.len() as isize - 1) as usize];
-                if i != self.cur {
-                    self.select(i);
-                }
+                let p = cards.iter().position(|&i| i == self.cur);
+                self.pick(pane, cards[step(p, cards.len())]);
             }
             Pane::From | Pane::To => {
                 let len = self.links(pane == Pane::From).len();
-                let st = if pane == Pane::From { &mut self.from } else { &mut self.to };
+                let st = if pane == Pane::From { &self.from } else { &self.to };
                 if len > 0 {
-                    st.select(Some((st.selected().unwrap_or(0) as isize + d).clamp(0, len as isize - 1) as usize));
+                    self.pick(pane, step(st.selected(), len));
                 }
             }
             Pane::Inside => {
                 let len = self.card().outline.len();
                 if len > 0 {
-                    let s = (self.inside.selected().unwrap_or(0) as isize + d).clamp(0, len as isize - 1) as usize;
-                    self.inside.select(Some(s));
-                    let line = self.card().outline[s].start;
-                    self.jump_to_line(line);
+                    self.pick(pane, step(self.inside.selected(), len));
                 }
             }
             Pane::Functions => {
                 let len = self.card().functions.len();
                 if len > 0 {
-                    let s = (self.fns.selected().unwrap_or(0) as isize + d).clamp(0, len as isize - 1) as usize;
-                    self.fns.select(Some(s));
-                    let f = &self.card().functions[s];
-                    let (start, end) = (f.start, f.end);
-                    self.jump_to_range(start, end);
+                    self.pick(pane, step(self.fns.selected(), len));
                 }
             }
             Pane::Diff => self.scroll_by(d),
             Pane::Chat => {}
+        }
+    }
+
+    /// Selects item `i` of `pane` (a card index for the map) as ↑/↓ landing there would.
+    pub fn pick(&mut self, pane: Pane, i: usize) {
+        match pane {
+            Pane::Map if i != self.cur && i < self.map.cards.len() => self.select(i),
+            Pane::From | Pane::To if i < self.links(pane == Pane::From).len() => {
+                let st = if pane == Pane::From { &mut self.from } else { &mut self.to };
+                st.select(Some(i));
+            }
+            Pane::Inside if i < self.card().outline.len() => {
+                self.inside.select(Some(i));
+                let line = self.card().outline[i].start;
+                self.jump_to_line(line);
+            }
+            Pane::Functions if i < self.card().functions.len() => {
+                self.fns.select(Some(i));
+                let f = &self.card().functions[i];
+                let (start, end) = (f.start, f.end);
+                self.jump_to_range(start, end);
+            }
+            _ => {}
         }
     }
 

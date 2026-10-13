@@ -47,6 +47,7 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 | `c` | collapse or expand the column holding the selected card |
 | `C` | reset every column to the automatic layout |
 | `q` / `esc` | quit (`esc` first closes the full-screen diff) |
+| mouse click | focus the pane under the pointer and select the map card, link, outline entry or function there, as `tab` and ↑/↓ would (⏎ then follows a link) |
 | mouse drag | drag the border between two rows, or between the diff and the functions panel, chat or minimap, to resize them |
 | mouse wheel | move the pane under the pointer: scroll the diff (also over the minimap), or ↑/↓ in the map and middle panes (focus stays put); over the chat it goes to the agent if it asked for mouse input, else scrolls the chat's scrollback |
 
