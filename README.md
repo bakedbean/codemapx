@@ -2,6 +2,8 @@
 
 A navigable map of the code changes an agent made on a branch: which files changed, which edit made the next one necessary, and why. Built for catching up on a branch before review, not for watching edits stream in.
 
+![codemapx showing a branch's map, an edit's explanation, its diff and a chat pane](docs/screenshot.png)
+
 ## Install
 
 ```sh
