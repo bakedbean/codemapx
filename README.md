@@ -1,5 +1,15 @@
 # codemapx
 
+Code review in the age of agentic development can be challenging and time consuming. An agent can touch dozens of files in one session, and the diff shows them alphabetically, with none of the reasoning that connected them. codemapx tells the story of the changes in a pull request. It does this by:
+
+- **Having the agent explain its own work.** The agent that wrote the branch knows why each edit was needed, so it writes the map: a short note on what changed in each file and why, and a one-line reason for each link between files. codemapx supplies the facts (files, diffs, line numbers, candidate links from imports) and validates the agent's annotations against them, so the story can't drift from the code.
+- **Laying the changes out cause → effect.** Files are grouped into columns, from shared contracts on the left to the code that uses them, then entry points, then tests and docs. Links show which edit made the next one necessary.
+- **Giving you a reading order.** A numbered trail walks you through every changed file, starting where the story starts, with the full diff of each file beside it.
+- **Showing what isn't in the diff.** Unchanged files that shaped the edits appear as context cards, each with a quoted line as evidence, and anything the branch references but nobody built yet is flagged as missing.
+- **Working on other people's PRs too.** Pointed at a pull request, the agent works out the reasons from the PR description, commits and code, and says plainly where an edit isn't explained. Those gaps are often what a reviewer most needs to ask about.
+
+You can explore the map in a TUI, with an agent chat beside the diff for follow-up questions, or share it as a self-contained HTML page.
+
 A navigable map of the code changes an agent made on a branch: which files changed, which edit made the next one necessary, and why. Built for catching up on a branch before review, not for watching edits stream in.
 
 ![codemapx showing a branch's map, an edit's explanation, its diff and a chat pane](docs/screenshot.png)
