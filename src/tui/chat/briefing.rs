@@ -8,7 +8,8 @@ fn label(c: &Card) -> &str {
     c.path.as_deref().unwrap_or(&c.name)
 }
 
-pub fn briefing(map: &Map, map_dir: Option<&Path>) -> String {
+/// `wsx` is the branch's wsx workspace (`repo/slug`), if any; it adds how to hand changes to its primary agent.
+pub fn briefing(map: &Map, map_dir: Option<&Path>, wsx: Option<&str>) -> String {
     let mut s = String::new();
     let _ = writeln!(s, "You are answering a reviewer's questions about branch `{}` of `{}`, from a chat panel inside codemapx, a TUI for reviewing a branch's changes.", map.branch, map.repo);
     s.push_str("- Read-only: do not edit, create or delete files, and do not commit.\n");
@@ -45,6 +46,12 @@ pub fn briefing(map: &Map, map_dir: Option<&Path>) -> String {
     let _ = writeln!(s, "\n## Where to look\n\n- `git diff {}...HEAD -- <path>` shows a file's change.", map.base);
     if let Some(d) = map_dir {
         let _ = writeln!(s, "- Raw facts: `{}`; annotations: `{}`.", d.join("facts.json").display(), d.join("annotations.json").display());
+    }
+    if let Some(ws) = wsx {
+        let _ = writeln!(s, "\n## Handing changes to the workspace agent\n");
+        let _ = writeln!(s, "This branch is wsx workspace `{ws}`; its primary agent edits it. When the user asks you to hand a change over, run:\n");
+        let _ = writeln!(s, "`wsx agent send --workspace {ws} primary \"<instruction>\"`\n");
+        s.push_str("The instruction must stand on its own: the file and lines, the current text, the replacement, and why. Send only what the user agreed to, once, and don't wait for a reply.\n");
     }
     s
 }

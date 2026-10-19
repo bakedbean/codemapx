@@ -27,14 +27,21 @@ impl AgentKind {
     }
 }
 
+/// Pre-approved in a wsx workspace, so a hand-off to its primary agent doesn't stop at a prompt.
+const WSX_SEND: &str = "Bash(wsx agent send:*)";
+
 /// `bin` (CODEMAPX_AGENT_BIN) or the kind's own name, read-only, with `briefing` as standing instructions.
-pub fn argv(kind: AgentKind, bin: Option<&str>, briefing: &str) -> Vec<String> {
+/// `wsx` lets claude run `wsx agent send` unprompted; codex's sandbox still asks.
+pub fn argv(kind: AgentKind, bin: Option<&str>, briefing: &str, wsx: bool) -> Vec<String> {
     let bin = bin.filter(|b| !b.trim().is_empty()).unwrap_or(kind.name());
     let mut v = vec![bin.to_string()];
     match kind {
         AgentKind::Claude => {
             v.extend(["--permission-mode", "default", "--allowedTools"].map(String::from));
             v.extend(CLAUDE_TOOLS.map(String::from));
+            if wsx {
+                v.push(WSX_SEND.into());
+            }
             v.extend(["--append-system-prompt".into(), briefing.into()]);
         }
         AgentKind::Codex => {

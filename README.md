@@ -67,6 +67,8 @@ Maps live in `~/.local/state/codemapx/<repo>/<branch>/<head-sha>/`; set `CODEMAP
 
 The chat runs `claude` by default; `CODEMAPX_AGENT=codex` runs codex instead, and `CODEMAPX_AGENT_BIN` points at another binary. The agent starts the first time you press `a` and lives until codemapx quits. codemapx doesn't save or resume chats; the agent's own history settings still apply (claude, for one, keeps its transcripts as usual).
 
+In a wsx workspace, the chat can hand a change to the workspace's primary agent: say "hand that to the workspace agent" and it runs `wsx agent send --workspace <repo>/<slug> primary "..."` with a self-contained instruction. claude may run that one command without a prompt; codex asks first. The send is fire-and-forget: check the workspace for the edit and re-run `/codemapx` to see it. codemapx looks for the workspace with `wsx workspace list --json` when the agent starts. Without wsx, or outside a workspace, the chat is unchanged.
+
 The TUI captures the mouse for border drags and wheel scrolling; most terminals still select text with shift-drag (option-drag in iTerm2 and Terminal.app).
 
 The map wants about 170 columns. Below that, Tests and Docs collapse to counts; below 130 the functions panel hides; below 100 it asks for a wider terminal.
