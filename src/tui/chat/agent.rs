@@ -28,13 +28,17 @@ impl AgentKind {
 }
 
 /// `bin` (CODEMAPX_AGENT_BIN) or the kind's own name, read-only, with `briefing` as standing instructions.
-pub fn argv(kind: AgentKind, bin: Option<&str>, briefing: &str) -> Vec<String> {
+/// `wsx` (`repo/slug`) pre-approves claude's sends to that workspace's primary only; codex's sandbox still asks.
+pub fn argv(kind: AgentKind, bin: Option<&str>, briefing: &str, wsx: Option<&str>) -> Vec<String> {
     let bin = bin.filter(|b| !b.trim().is_empty()).unwrap_or(kind.name());
     let mut v = vec![bin.to_string()];
     match kind {
         AgentKind::Claude => {
             v.extend(["--permission-mode", "default", "--allowedTools"].map(String::from));
             v.extend(CLAUDE_TOOLS.map(String::from));
+            if let Some(ws) = wsx {
+                v.push(format!("Bash({}:*)", super::wsx::send_prefix(ws)));
+            }
             v.extend(["--append-system-prompt".into(), briefing.into()]);
         }
         AgentKind::Codex => {

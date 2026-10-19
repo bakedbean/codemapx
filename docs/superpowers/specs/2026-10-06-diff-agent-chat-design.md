@@ -151,6 +151,6 @@ Changed: `tui/app.rs` (pane, divider, `show_chat`, `chat_width`, `chat_pane`, `c
 
 - pi, omp and hermes.
 - Persisting or resuming chats.
-- Talking to the wsx primary agent.
+- Talking to the wsx primary agent. (Later added as a one-way hand-off: in a wsx workspace the briefing names it and claude may run `wsx agent send`.)
 - Auto-appending context to every message.
 - Chat in the HTML page.

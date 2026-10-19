@@ -5,6 +5,7 @@ pub mod briefing;
 pub mod keys;
 pub mod pty;
 pub mod render;
+pub mod wsx;
 
 use std::{env, path::Path, sync::mpsc, time::Instant};
 
@@ -189,7 +190,8 @@ pub fn reference(app: &App, from: Pane) -> Option<String> {
 /// Starts the agent sized to the panel as last drawn, briefed on the map; CODEMAPX_AGENT picks it, CODEMAPX_AGENT_BIN its binary.
 pub fn start(app: &mut App) {
     let inner = app.chat_pane.inner(Margin::new(1, 1));
-    let brief = briefing::briefing(&app.map, app.map_dir.as_deref());
+    let ws = wsx::workspace(&app.root);
+    let brief = briefing::briefing(&app.map, app.map_dir.as_deref(), ws.as_deref());
     let chat = app.chat.get_or_insert_with(|| Chat::new(AgentKind::Claude));
     match AgentKind::from_env(env::var("CODEMAPX_AGENT").ok().as_deref()) {
         Ok(k) => chat.kind = k,
@@ -198,6 +200,6 @@ pub fn start(app: &mut App) {
             return;
         }
     }
-    let argv = agent::argv(chat.kind, env::var("CODEMAPX_AGENT_BIN").ok().as_deref(), &brief);
+    let argv = agent::argv(chat.kind, env::var("CODEMAPX_AGENT_BIN").ok().as_deref(), &brief, ws.as_deref());
     chat.start(&argv, &app.root, inner.height.max(1), inner.width.max(1));
 }

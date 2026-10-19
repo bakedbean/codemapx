@@ -8,13 +8,14 @@ use codemapx::tui::chat::{Chat, reference};
 use codemapx::tui::chat::pty::{Session, settled};
 use codemapx::tui::chat::agent::{AgentKind, Composer, argv, composer, ready};
 use codemapx::tui::chat::prefill_bytes;
+use codemapx::tui::chat::wsx::{run, workspace_at};
 use codemapx::tui::chat::{keys::{encode_key, wrap_paste}, render::render_screen};
 use ratatui::{buffer::Buffer, crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind}, layout::Rect, style::Color};
 
 #[test]
 fn briefing_covers_the_map_without_diffs() {
     let map = common::sample_map();
-    let b = briefing(&map, Some(Path::new("/state/map")));
+    let b = briefing(&map, Some(Path::new("/state/map")), None);
     for needle in [
         "branch `feature/12-apply-fees`",
         "Read-only",
@@ -34,8 +35,47 @@ fn briefing_covers_the_map_without_diffs() {
 
 #[test]
 fn briefing_without_a_map_dir_skips_the_raw_files() {
-    let b = briefing(&common::sample_map(), None);
+    let b = briefing(&common::sample_map(), None, None);
     assert!(!b.contains("facts.json"));
+    assert!(!b.contains("wsx"), "no wsx section outside a workspace");
+}
+
+#[test]
+fn briefing_in_a_wsx_workspace_says_how_to_hand_changes_over() {
+    let b = briefing(&common::sample_map(), None, Some("sample/apply-fees"));
+    assert!(b.contains("## Handing changes to the workspace agent"), "{b}");
+    assert!(b.contains("`wsx agent send --workspace sample/apply-fees primary '<instruction>'`"), "{b}");
+    assert!(b.contains("queued, not done"), "{b}");
+}
+
+#[test]
+fn wsx_workspace_is_the_entry_at_the_worktree() {
+    let dir = tempfile::tempdir().unwrap();
+    let json = format!(
+        r#"[{{"repo":"a","slug":"x","path":"/nowhere"}},{{"repo":"sample","slug":"apply-fees","path":"{}"}}]"#,
+        dir.path().display()
+    );
+    assert_eq!(workspace_at(&json, dir.path()).as_deref(), Some("sample/apply-fees"));
+    assert_eq!(workspace_at(&json, Path::new("/elsewhere")), None);
+    assert_eq!(workspace_at("not json", dir.path()), None);
+    let link = dir.path().join("link");
+    std::os::unix::fs::symlink(dir.path(), &link).unwrap();
+    assert_eq!(workspace_at(&json, &link).as_deref(), Some("sample/apply-fees"), "matches through a symlink");
+}
+
+#[test]
+fn wsx_runs_are_bounded() {
+    let sh = |script: &str| {
+        let mut c = std::process::Command::new("sh");
+        c.args(["-c", script]);
+        c
+    };
+    assert_eq!(run(&mut sh("echo hi"), Duration::from_secs(5)).as_deref(), Some("hi\n"));
+    assert_eq!(run(&mut sh("echo hi; exit 1"), Duration::from_secs(5)), None);
+    assert_eq!(run(&mut std::process::Command::new("/no/such/wsx"), Duration::from_secs(5)), None);
+    let t = Instant::now();
+    assert_eq!(run(&mut sh("exec sleep 30"), Duration::from_millis(200)), None);
+    assert!(t.elapsed() < Duration::from_secs(5), "a hung wsx is killed");
 }
 
 #[test]
@@ -49,16 +89,18 @@ fn agent_kind_comes_from_the_env() {
 #[test]
 fn claude_argv_is_read_only_with_the_briefing() {
     assert_eq!(
-        argv(AgentKind::Claude, None, "brief"),
+        argv(AgentKind::Claude, None, "brief", None),
         ["claude", "--permission-mode", "default", "--allowedTools", "Read", "Grep", "Glob", "--append-system-prompt", "brief"]
     );
-    assert_eq!(argv(AgentKind::Claude, Some("/opt/claude"), "b")[0], "/opt/claude");
-    assert_eq!(argv(AgentKind::Claude, Some(""), "b")[0], "claude");
+    assert_eq!(argv(AgentKind::Claude, Some("/opt/claude"), "b", None)[0], "/opt/claude");
+    assert_eq!(argv(AgentKind::Claude, Some(""), "b", None)[0], "claude");
+    let v = argv(AgentKind::Claude, None, "b", Some("sample/apply-fees"));
+    assert!(v.contains(&"Bash(wsx agent send --workspace sample/apply-fees primary:*)".to_string()), "{v:?}");
 }
 
 #[test]
 fn codex_argv_escapes_the_briefing() {
-    let v = argv(AgentKind::Codex, None, "say \"hi\"\nC:\\x\t.");
+    let v = argv(AgentKind::Codex, None, "say \"hi\"\nC:\\x\t.", Some("sample/apply-fees"));
     assert_eq!(v[..6], ["codex", "-s", "read-only", "-a", "on-request", "-c"]);
     assert_eq!(v[6], r#"developer_instructions="say \"hi\"\nC:\\x\t.""#);
     assert_eq!(v.len(), 7);
