@@ -50,8 +50,10 @@ pub fn briefing(map: &Map, map_dir: Option<&Path>, wsx: Option<&str>) -> String 
     if let Some(ws) = wsx {
         let _ = writeln!(s, "\n## Handing changes to the workspace agent\n");
         let _ = writeln!(s, "This branch is wsx workspace `{ws}`; its primary agent edits it. When the user asks you to hand a change over, run:\n");
-        let _ = writeln!(s, "`wsx agent send --workspace {ws} primary \"<instruction>\"`\n");
-        s.push_str("The instruction must stand on its own: the file and lines, the current text, the replacement, and why. Send only what the user agreed to, once, and don't wait for a reply.\n");
+        let _ = writeln!(s, "`{} '<instruction>'`\n", super::wsx::send_prefix(ws));
+        s.push_str("- The instruction must stand on its own: the file and lines, the current text, the replacement, and why. Send only what the user agreed to, once.\n");
+        s.push_str("- Keep it in single quotes, writing each `'` inside it as `'\\''`, so `$`, backticks and `\\` reach the agent literally.\n");
+        s.push_str("- The send only queues the message: tell the user it was queued, not done, and relay any error or warning it prints (one about no running dashboard means wsx must be open to deliver it). Don't retry on failure or wait for a reply.\n");
     }
     s
 }

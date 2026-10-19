@@ -200,6 +200,6 @@ pub fn start(app: &mut App) {
             return;
         }
     }
-    let argv = agent::argv(chat.kind, env::var("CODEMAPX_AGENT_BIN").ok().as_deref(), &brief, ws.is_some());
+    let argv = agent::argv(chat.kind, env::var("CODEMAPX_AGENT_BIN").ok().as_deref(), &brief, ws.as_deref());
     chat.start(&argv, &app.root, inner.height.max(1), inner.width.max(1));
 }
